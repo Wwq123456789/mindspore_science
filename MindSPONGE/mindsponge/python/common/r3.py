@@ -1,4 +1,7 @@
+"""r3"""
+
 import mindspore.numpy as mnp
+import numpy as np
 
 
 def vecs_sub(v1, v2):
@@ -100,3 +103,8 @@ def rigids_mul_vecs(rot, trans, v):
     """Apply rigid transforms 'r' to points 'v'."""
 
     return vecs_add(rots_mul_vecs(rot, v), trans)
+
+
+def rigids_to_tensor_flat12(r):
+    """Flat12 encoding: rotation matrix (9 floats) + translation (3 floats)."""
+    return np.stack(list(r.rot) + list(r.trans), axis=-1)
