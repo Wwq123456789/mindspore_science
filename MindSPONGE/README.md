@@ -1,79 +1,131 @@
+![MindSPONGE标志](docs/MindSPONGE.png "MindSPONGE logo")
+
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/mindspore.svg)](https://pypi.org/project/mindspore)
+[![PyPI](https://badge.fury.io/py/mindspore.svg)](https://badge.fury.io/py/mindspore)
+[![LICENSE](https://img.shields.io/github/license/mindspore-ai/mindspore.svg?style=flat-square)](https://github.com/mindspore-ai/mindspore/blob/master/LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://gitee.com/mindspore/mindscience/pulls)
 # MindSPONGE
 
-- [MindSPONGE介绍](#MindSPONGE介绍)
-- [安装教程](#安装教程)
-    - [确认系统环境信息](#确认系统环境信息)
-    - [安装](#安装)
-        - [安装MindSpore](#安装mindspore)
-        - [安装MindSPONGE](#安装MindSPONGE)
-    - [源码安装](#源码安装)
-- [社区](#社区)
-    - [治理](#治理)
-- [贡献](#贡献)
-- [许可证](#许可证)
+<!-- TOC -->
+
+- [MindSPONGE](#mindsponge)
+    - [MindSPONGE介绍](#mindsponge介绍)
+    - [最新消息](#最新消息)
+    - [初体验](#初体验)
+    - [安装教程](#安装教程)
+        - [硬件支持情况](#硬件支持情况)
+        - [pip安装](#pip安装)
+            - [源码安装](#源码安装)
+    - [社区](#社区)
+        - [SIG](#sig)
+        - [合作者](#合作者)
+    - [许可证](#许可证)
+
+<!-- TOC -->
 
 ## MindSPONGE介绍
 
-分子模拟是指利用计算机以原子水平的分子模型来模拟分子结构与行为，进而模拟分子体系的各种物理、化学性质的方法。它是在实验基础上，通过基本原理，构筑起一套模型和算法，从而计算出合理的分子结构与分子行为。
+MindSPONGE(Simulation Package Of Next GEneration molecular modelling)是基于[昇思MindSporpe](https://www.mindspore.cn/)的计算生物领域套件，支持分子动力学、蛋白质折叠等常用功能，旨在于为广大的科研人员、老师及学生提供高效易用的AI计算生物软件。
 
-近年来，分子模拟技术发展迅速并且在多个学科领域得到了广泛的应用。在药物设计领域，可用于研究病毒、药物的作用机理等；在生物科学领域，可用于表征蛋白质的多级结构与性质；在材料学领域，可用于研究结构与力学性能、材料的优化设计等；在化学领域，可用于研究表面催化及机理；在石油化工领域，可用于分子筛催化剂结构表征、合成设计、吸附扩散，可构建和表征高分子链以及晶态或非晶态本体聚合物的结构，预测包括共混行为、机械性质、扩散、内聚等重要性质。
+<img src="docs/archi.png" alt="MindSPONGE Architecture" width="600"/>
 
-MindSPONGE是由`高毅勤`课题组（北京大学、深圳湾实验室）和华为`MindSpore`团队联合开发的分子模拟库，具有高性能、模块化等特性。MindSPONGE是`MindSpore`和`SPONGE`（`S`imulation `P`ackage `O`f `N`ext `GE`neration molecular modeling）的缩写。MindSPONGE是第一个根植于AI计算框架的分子模拟工具，其使用模块化的设计思路，可以快速构建分子模拟流程，并且基于MindSpore自动并行、图算融合等特性，可高效地完成传统分子模拟。同时，MindSPONGE也可以将神经网络等AI方法与传统分子模拟进行结合，应用到生物、材料、医药等领域中。
+## 最新消息
 
-MindSPONGE中包含了多个传统分子模拟案例，更多详情，请点击查看[案例](https://gitee.com/mindspore/mindscience/tree/master/MindSPONGE/examples)。
+- 2022.04.21 [CAMEO竞赛月榜第一](https://www.huawei.com/cn/news/2022/4/mindspore-cameo-protein-ascend)
 
-未来，MindSPONGE中将包含更多结合AI算法的分子模拟案例，欢迎大家的关注和支持。
+## 初体验
 
-<img src="docs/mindsponge-arch.png" alt="MindSPONGE Architecture" width="600"/>
+- PSP数据集加载
+
+```bash
+```
+
+- 蛋白质 violation 计算
+
+```bash
+import mindsponge as msp
+violation = msp.metrics.violation()
+```
+
+- 四元数与旋转矩阵转换
+
+```bash
+```
+
+- 简单体系分子模拟
+
+```bash
+```
+
+- 蛋白质结构豫驰
+
+```bash
+```
+
+- Amber文件加载
+
+```bash
+```
+
+更多应用案例请见：
+
+- [分子动力学]()
+- [蛋白质结构预测]()
+- [蛋白质结构质量评估]()
+- [MSA引擎]()
+- 分子对接打分(TO BE DONE)
+- 基于功能的蛋白设计(TO BE DONE)
+- 基于结构的蛋白设计(TO BE DONE)
+- 蛋白质功能预测(TO BE DONE)
+- 化合物分子表征模型(TO BE DONE)
 
 ## 安装教程
 
-### 确认系统环境信息
+- 依赖包
 
-- 硬件平台确认为Linux系统下的GPU。
-- 参考[MindSpore安装指南](https://www.mindspore.cn/install)，完成MindSpore的安装，要求至少1.2.0版本。
+```bash
+numpy
+biopython
+```
+
+### 硬件支持情况
+
+| 硬件平台      | 操作系统        | 状态  |
+| :------------ | :-------------- | :--- |
+| Ascend 910    | Ubuntu-x86      | ✔️   |
+|               | Ubuntu-aarch64  | ✔️   |
+|               | EulerOS-aarch64 | ✔️   |
+|               | CentOS-x86      | ✔️   |
+|               | CentOS-aarch64  | ✔️   |
+| GPU CUDA 10.1 | Ubuntu-x86      | ✔️   |
 
 ### pip安装
 
-#### 安装MindSpore
+- whl包获取路径
 
 ```bash
-pip install mindspore-gpu
+pip install mindsponge-*.whl
 ```
 
-#### 安装MindSPONGE
+#### 源码安装
 
 ```bash
-cd ~/MindScience/MindSPONGE
-bash build.sh
-pip install ./output/mindsponge-*.whl
+git clone https://gitee.com/mindspore/mindscience.git
+cd {PATH}/MindScience/MindSPONGE
+bash build.sh -e [gpu|ascend]
+cd build
+pip install ./whl/mindsponge-*.whl
 ```
-
-### 源码安装
-
-1. 从代码仓下载源码
-
-    ```bash
-    cd ~
-    git clone https://gitee.com/mindspore/mindscience.git
-    ```
-
-2. 编译安装MindSPONGE
-
-    ```bash
-    cd ~/MindScience/MindSPONGE
-    python setup.py install --user
-    ```
 
 ## 社区
 
-### 治理
+### SIG
 
 查看MindSpore如何进行[开放治理](https://gitee.com/mindspore/community/blob/master/governance.md)。
 
-## 贡献
+### 合作者
 
-欢迎参与贡献MindSPONGE。更多详情，请参阅我们的[贡献者Wiki](https://gitee.com/mindspore/mindspore/blob/master/CONTRIBUTING.md)。
+- [高毅勤课题组]()
 
 ## 许可证
 
