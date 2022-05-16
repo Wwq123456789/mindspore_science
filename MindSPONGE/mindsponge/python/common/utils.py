@@ -8,8 +8,8 @@ import mindspore.numpy as mnp
 import mindspore.nn as nn
 from mindspore.common.tensor import Tensor
 
-from .residue_constants import restype_order, atom_order, restypes, restype_1to3, chi_angles_atoms, QUAT_MULTIPLY_BY_VEC
-from .r3 import rigids_from_3_points, invert_rigids, rigids_mul_vecs
+from . import residue_constants
+from . import r3
 
 
 QUAT_TO_ROT = np.zeros((4, 4, 3, 3), dtype=np.float32)
@@ -33,9 +33,9 @@ QUAT_TO_ROT = Tensor(QUAT_TO_ROT)
 def pseudo_beta_fn(aatype, all_atom_positions, all_atom_masks):
     """Create pseudo beta features."""
 
-    is_gly = mnp.equal(aatype, restype_order['G'])
-    ca_idx = atom_order['CA']
-    cb_idx = atom_order['CB']
+    is_gly = mnp.equal(aatype, residue_constants.restype_order['G'])
+    ca_idx = residue_constants.atom_order['CA']
+    cb_idx = residue_constants.atom_order['CB']
     pseudo_beta = mnp.where(
         mnp.tile(is_gly[..., None].astype("int32"), [1,] * len(is_gly.shape) + [3,]).astype("bool"),
         all_atom_positions[..., ca_idx, :],
@@ -411,12 +411,12 @@ def atom37_to_torsion_angles(
                                            psi_mask[:, :, None],
                                            chis_mask], axis=2)
 
-    torsion_frames_rots, torsion_frames_trans = rigids_from_3_points(
+    torsion_frames_rots, torsion_frames_trans = r3.rigids_from_3_points(
         torsions_atom_pos[:, :, :, 1, :],
         torsions_atom_pos[:, :, :, 2, :],
         torsions_atom_pos[:, :, :, 0, :])
-    inv_torsion_rots, inv_torsion_trans = invert_rigids(torsion_frames_rots, torsion_frames_trans)
-    forth_atom_rel_pos = rigids_mul_vecs(inv_torsion_rots, inv_torsion_trans, torsions_atom_pos[:, :, :, 3, :])
+    inv_torsion_rots, inv_torsion_trans = r3.invert_rigids(torsion_frames_rots, torsion_frames_trans)
+    forth_atom_rel_pos = r3.rigids_mul_vecs(inv_torsion_rots, inv_torsion_trans, torsions_atom_pos[:, :, :, 3, :])
 
     # Compute the position of the forth atom in this frame (y and z coordinate
     torsion_angles_sin_cos = mnp.stack([forth_atom_rel_pos[..., 2], forth_atom_rel_pos[..., 1]], axis=-1)
@@ -432,25 +432,27 @@ def atom37_to_torsion_angles(
 def get_chi_atom_indices():
     """Returns atom indices needed to compute chi angles for all residue types.
 
-    Returns:
+  Returns:
     A tensor of shape [residue_types=21, chis=4, atoms=4]. The residue types are
     in the order specified in residue_constants.restypes + unknown residue type
     at the end. For chi angles which are not defined on the residue, the
     positions indices are by default set to 0.
-    """
-
+  """
     chi_atom_indices = []
-    for residue_name in restypes:
-        residue_name = restype_1to3[residue_name]
-        residue_chi_angles = chi_angles_atoms[residue_name]
+    for residue_name in residue_constants.restypes:
+        residue_name = residue_constants.restype_1to3[residue_name]
+        residue_chi_angles = residue_constants.chi_angles_atoms[residue_name]
         atom_indices = []
         for chi_angle in residue_chi_angles:
-            atom_indices.append([atom_order[atom] for atom in chi_angle])
+            atom_indices.append(
+                [residue_constants.atom_order[atom] for atom in chi_angle])
         for _ in range(4 - len(atom_indices)):
             atom_indices.append([0, 0, 0, 0])  # For chi angles not defined on the AA.
         chi_atom_indices.append(atom_indices)
+
     chi_atom_indices.append([[0, 0, 0, 0]] * 4)  # For UNKNOWN residue.
-    return np.asarray(chi_atom_indices)
+
+    return np.array(chi_atom_indices)
 
 
 def to_tensor(quaternion, translation):
@@ -629,7 +631,7 @@ def to_tensor_new(quaternion, translation):
 def quat_multiply_by_vec(quat, vec):
     """Multiply a quaternion by a pure-vector quaternion."""
 
-    return mnp.sum(QUAT_MULTIPLY_BY_VEC * quat[..., :, None, None] * vec[..., None, :, None],
+    return mnp.sum(residue_constants.QUAT_MULTIPLY_BY_VEC * quat[..., :, None, None] * vec[..., None, :, None],
                    axis=(-3, -2))
 
 
@@ -1037,3 +1039,193 @@ def compute_plddt(logits, start_n, bin_width):
     predicted_lddt_ca = np.sum(probs * bin_centers[None, :], axis=-1)
     return predicted_lddt_ca * 100
 
+
+MAX_TEMPLATE_HITS = 20
+RELAX_MAX_ITERATIONS = 0
+RELAX_ENERGY_TOLERANCE = 2.39
+RELAX_STIFFNESS = 10.0
+RELAX_EXCLUDE_RESIDUES = []
+RELAX_MAX_OUTER_ITERATIONS = 1
+
+
+def gather(params, indices, axis=0):
+    """gather operation"""
+
+    take_fn = lambda p, i: np.take(p, i, axis=axis)
+    return take_fn(params, indices)
+
+
+def np_gather(params, indices, axis=0, batch_dims=0):
+    """np gather"""
+
+    if batch_dims == 0:
+        return gather(params, indices)
+    result = []
+    if batch_dims == 1:
+        for p, i in zip(params, indices):
+            axis = axis - batch_dims if axis - batch_dims > 0 else 0
+            r = gather(p, i, axis=axis)
+            result.append(r)
+        return np.stack(result)
+    for p, i in zip(params[0], indices[0]):
+        r = gather(p, i, axis=axis)
+        result.append(r)
+    res = np.stack(result)
+    return res.reshape((1,) + res.shape)
+
+
+def rigids_to_quataffine(r):
+    """Convert Rigids r into QuatAffine, inverse of 'rigids_from_quataffine'."""
+    return quat_affine.QuatAffine(
+        quaternion=None,
+        rotation=[[r.rot.xx, r.rot.xy, r.rot.xz],
+                  [r.rot.yx, r.rot.yy, r.rot.yz],
+                  [r.rot.zx, r.rot.zy, r.rot.zz]],
+        translation=[r.trans.x, r.trans.y, r.trans.z])
+
+
+def make_atom14_positions(prot):
+    """Constructs denser atom positions (14 dimensions instead of 37).
+    Args:
+        prot: dict with np.array datetype, include "aatype", "all_atom_positions" and "all_atom_mask"
+
+    Returns:
+        Dict contains:
+        * 'atom14_atom_exists': atom14 position exists mask
+        * 'atom14_gt_exists': ground truth atom14 position exists mask
+        * 'atom14_gt_positions': ground truth atom14 positions
+        * 'residx_atom14_to_atom37': mapping for (residx, atom14) --> atom37, i.e. an array
+        * 'residx_atom37_to_atom14': gather indices for mapping back
+        * 'atom14_alt_gt_positions': apply transformation matrices for the given residue sequence to the ground
+         truth positions
+        * 'atom14_alt_gt_exists': the mask for the alternative ground truth
+        * 'atom14_atom_is_ambiguous': create an ambiguous_mask for the given sequence
+
+    """
+    restype_atom14_to_atom37 = []  # mapping (restype, atom14) --> atom37
+    restype_atom37_to_atom14 = []  # mapping (restype, atom37) --> atom14
+    restype_atom14_mask = []
+
+    for rt in residue_constants.restypes:
+        atom_names = residue_constants.restype_name_to_atom14_names[
+            residue_constants.restype_1to3[rt]]
+
+        restype_atom14_to_atom37.append([
+            (residue_constants.atom_order[name] if name else 0)
+            for name in atom_names
+        ])
+
+        atom_name_to_idx14 = {name: i for i, name in enumerate(atom_names)}
+        restype_atom37_to_atom14.append([
+            (atom_name_to_idx14[name] if name in atom_name_to_idx14 else 0)
+            for name in residue_constants.atom_types
+        ])
+
+        restype_atom14_mask.append([(1. if name else 0.) for name in atom_names])
+
+    # Add dummy mapping for restype 'UNK'.
+    restype_atom14_to_atom37.append([0] * 14)
+    restype_atom37_to_atom14.append([0] * 37)
+    restype_atom14_mask.append([0.] * 14)
+
+    restype_atom14_to_atom37 = np.array(restype_atom14_to_atom37, dtype=np.int32)
+    restype_atom37_to_atom14 = np.array(restype_atom37_to_atom14, dtype=np.int32)
+    restype_atom14_mask = np.array(restype_atom14_mask, dtype=np.float32)
+
+    # Create the mapping for (residx, atom14) --> atom37, i.e. an array
+    # with shape (num_res, 14) containing the atom37 indices for this protein.
+    residx_atom14_to_atom37 = restype_atom14_to_atom37[prot["aatype"]]
+    residx_atom14_mask = restype_atom14_mask[prot["aatype"]]
+
+    # Create a mask for known ground truth positions.
+    residx_atom14_gt_mask = residx_atom14_mask * np.take_along_axis(
+        prot["all_atom_mask"], residx_atom14_to_atom37, axis=1).astype(np.float32)
+
+    # Gather the ground truth positions.
+    residx_atom14_gt_positions = residx_atom14_gt_mask[:, :, None] * (
+        np.take_along_axis(prot["all_atom_positions"],
+                           residx_atom14_to_atom37[..., None],
+                           axis=1))
+
+    prot["atom14_atom_exists"] = residx_atom14_mask
+    prot["atom14_gt_exists"] = residx_atom14_gt_mask
+    prot["atom14_gt_positions"] = residx_atom14_gt_positions
+
+    prot["residx_atom14_to_atom37"] = residx_atom14_to_atom37
+
+    # Create the gather indices for mapping back.
+    residx_atom37_to_atom14 = restype_atom37_to_atom14[prot["aatype"]]
+    prot["residx_atom37_to_atom14"] = residx_atom37_to_atom14
+
+    # Create the corresponding mask.
+    restype_atom37_mask = np.zeros([21, 37], dtype=np.float32)
+    for restype, restype_letter in enumerate(residue_constants.restypes):
+        restype_name = residue_constants.restype_1to3[restype_letter]
+        atom_names = residue_constants.residue_atoms[restype_name]
+        for atom_name in atom_names:
+            atom_type = residue_constants.atom_order[atom_name]
+            restype_atom37_mask[restype, atom_type] = 1
+
+    residx_atom37_mask = restype_atom37_mask[prot["aatype"]]
+    prot["atom37_atom_exists"] = residx_atom37_mask
+
+    # As the atom naming is ambiguous for 7 of the 20 amino acids, provide
+    # alternative ground truth coordinates where the naming is swapped
+    restype_3 = [
+        residue_constants.restype_1to3[res] for res in residue_constants.restypes
+    ]
+    restype_3 += ["UNK"]
+
+    # Matrices for renaming ambiguous atoms.
+    all_matrices = {res: np.eye(14, dtype=np.float32) for res in restype_3}
+    for resname, swap in residue_constants.residue_atom_renaming_swaps.items():
+        correspondences = np.arange(14)
+        for source_atom_swap, target_atom_swap in swap.items():
+            source_index = residue_constants.restype_name_to_atom14_names[
+                resname].index(source_atom_swap)
+            target_index = residue_constants.restype_name_to_atom14_names[
+                resname].index(target_atom_swap)
+            correspondences[source_index] = target_index
+            correspondences[target_index] = source_index
+            renaming_matrix = np.zeros((14, 14), dtype=np.float32)
+            for index, correspondence in enumerate(correspondences):
+                renaming_matrix[index, correspondence] = 1.
+        all_matrices[resname] = renaming_matrix.astype(np.float32)
+    renaming_matrices = np.stack([all_matrices[restype] for restype in restype_3])
+
+    # Pick the transformation matrices for the given residue sequence
+    # shape (num_res, 14, 14).
+    renaming_transform = renaming_matrices[prot["aatype"]]
+
+    # Apply it to the ground truth positions. shape (num_res, 14, 3).
+    alternative_gt_positions = np.einsum("rac,rab->rbc",
+                                         residx_atom14_gt_positions,
+                                         renaming_transform)
+    prot["atom14_alt_gt_positions"] = alternative_gt_positions
+
+    # Create the mask for the alternative ground truth (differs from the
+    # ground truth mask, if only one of the atoms in an ambiguous pair has a
+    # ground truth position).
+    alternative_gt_mask = np.einsum("ra,rab->rb",
+                                    residx_atom14_gt_mask,
+                                    renaming_transform)
+
+    prot["atom14_alt_gt_exists"] = alternative_gt_mask
+
+    # Create an ambiguous atoms mask.  shape: (21, 14).
+    restype_atom14_is_ambiguous = np.zeros((21, 14), dtype=np.float32)
+    for resname, swap in residue_constants.residue_atom_renaming_swaps.items():
+        for atom_name1, atom_name2 in swap.items():
+            restype = residue_constants.restype_order[
+                residue_constants.restype_3to1[resname]]
+            atom_idx1 = residue_constants.restype_name_to_atom14_names[resname].index(
+                atom_name1)
+            atom_idx2 = residue_constants.restype_name_to_atom14_names[resname].index(
+                atom_name2)
+            restype_atom14_is_ambiguous[restype, atom_idx1] = 1
+            restype_atom14_is_ambiguous[restype, atom_idx2] = 1
+
+    # From this create an ambiguous_mask for the given sequence.
+    prot["atom14_atom_is_ambiguous"] = (
+        restype_atom14_is_ambiguous[prot["aatype"]])
+    return prot

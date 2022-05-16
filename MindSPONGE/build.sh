@@ -16,7 +16,7 @@
 set -e
 
 BASEPATH=$(cd "$(dirname $0)"; pwd)
-OUTPUT_PATH="${BASEPATH}/output"
+OUTPUT_PATH="${BASEPATH}/output/"
 PYTHON=$(which python3)
 
 mk_new_dir() {
@@ -38,13 +38,19 @@ write_checksum() {
     done
 }
 
+echo ${BASEPATH}
+mk_new_dir "${BASEPATH}/build/"
+mk_new_dir "${BASEPATH}/build/lib/"
 mk_new_dir "${OUTPUT_PATH}"
-
-${PYTHON} ${BASEPATH}/setup.py bdist_wheel
-
-mv ${BASEPATH}/dist/*whl ${OUTPUT_PATH}
+cp -r "${BASEPATH}/mindsponge/python/" "${BASEPATH}/build/mindsponge/"
+cp "${BASEPATH}/setup.py" "${BASEPATH}/build/"
+cd "${BASEPATH}/build/"
+${PYTHON} ./setup.py bdist_wheel
+cd ..
+mv ${BASEPATH}/build/dist/*whl ${OUTPUT_PATH}
 
 write_checksum
 
 
 echo "------Successfully created mindsponge package------"
+

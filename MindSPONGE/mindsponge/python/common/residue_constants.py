@@ -1,12 +1,14 @@
 """residue_constants."""
-
+import os
 import collections
 import functools
-from typing import Mapping, List, Tuple
+from typing import Mapping
 import numpy as np
 
+import mindsponge
 from mindspore.common.tensor import Tensor
 
+stereo_chemical_props_path = os.path.dirname(mindsponge.__file__) + "/common/stereo_chemical_props.txt"
 QUAT_MULTIPLY = np.zeros((4, 4, 4), dtype=np.float32)
 QUAT_MULTIPLY[:, :, 0] = [[1, 0, 0, 0],
                           [0, -1, 0, 0],
@@ -366,6 +368,19 @@ residue_atoms = {
     'VAL': ['C', 'CA', 'CB', 'CG1', 'CG2', 'N', 'O']
 }
 
+# Naming swaps for ambiguous atom names.
+# Due to symmetries in the amino acids the naming of atoms is ambiguous in
+# 4 of the 20 amino acids.
+# (The LDDT paper lists 7 amino acids as ambiguous, but the naming ambiguities
+# in LEU, VAL and ARG can be resolved by using the 3d constellations of
+# the 'ambiguous' atoms and their neighbours)
+residue_atom_renaming_swaps = {
+    'ASP': {'OD1': 'OD2'},
+    'GLU': {'OE1': 'OE2'},
+    'PHE': {'CD1': 'CD2', 'CE1': 'CE2'},
+    'TYR': {'CD1': 'CD2', 'CE1': 'CE2'},
+}
+
 # Van der Waals radii [Angstroem] of the atoms (from Wikipedia)
 van_der_waals_radius = {
     'C': 1.7,
@@ -382,9 +397,7 @@ BondAngle = collections.namedtuple(
 
 
 @functools.lru_cache(maxsize=None)
-def load_stereo_chemical_props() -> Tuple[Mapping[str, List[Bond]],
-                                          Mapping[str, List[Bond]],
-                                          Mapping[str, List[BondAngle]]]:
+def load_stereo_chemical_props():
     """Load stereo_chemical_props.txt into a nice structure.
 
     Load literature values for bond lengths and bond angles and translate
@@ -396,8 +409,6 @@ def load_stereo_chemical_props() -> Tuple[Mapping[str, List[Bond]],
       residue_virtual_bonds: dict that maps resname --> list of Bond tuples
       residue_bond_angles: dict that maps resname --> list of BondAngle tuples
     """
-    stereo_chemical_props_path = (
-        'alphafold/common/stereo_chemical_props.txt')
     with open(stereo_chemical_props_path, 'rt') as f:
         stereo_chemical_props = f.read()
     lines_iter = iter(stereo_chemical_props.splitlines())
@@ -468,10 +479,17 @@ def load_stereo_chemical_props() -> Tuple[Mapping[str, List[Bond]],
             residue_virtual_bonds[resname].append(
                 Bond(ba.atom1_name, ba.atom3name, length, stddev))
 
-    return (residue_bonds,
-            residue_virtual_bonds,
-            residue_bond_angles)
+    return residue_bonds, residue_virtual_bonds, residue_bond_angles
 
+
+# Between-residue bond lengths for general bonds (first element) and for Proline
+# (second element).
+between_res_bond_length_c_n = [1.329, 1.341]
+between_res_bond_length_stddev_c_n = [0.014, 0.016]
+
+# Between-residue cos_angles.
+between_res_cos_angles_c_n_ca = [-0.5203, 0.0353]  # degrees: 121.352 +- 2.315
+between_res_cos_angles_ca_c_n = [-0.4473, 0.0311]  # degrees: 116.568 +- 1.995
 
 # This mapping is used when we need to store atom data in a format that requires
 # fixed atom data size for every residue (e.g. a numpy array).
@@ -840,3 +858,54 @@ def _make_rigid_group_constants():
 
 
 _make_rigid_group_constants()
+
+
+def make_atom14_dists_bounds(overlap_tolerance=1.5, bond_length_tolerance_factor=15):
+    """compute upper and lower bounds for bonds to assess violations."""
+    restype_atom14_bond_lower_bound = np.zeros([21, 14, 14], np.float32)
+    restype_atom14_bond_upper_bound = np.zeros([21, 14, 14], np.float32)
+    restype_atom14_bond_stddev = np.zeros([21, 14, 14], np.float32)
+    residue_bonds, residue_virtual_bonds, _ = load_stereo_chemical_props()
+    for restype, restype_letter in enumerate(restypes):
+        resname = restype_1to3[restype_letter]
+        atom_list = restype_name_to_atom14_names[resname]
+
+        # create lower and upper bounds for clashes
+        for atom1_idx, atom1_name in enumerate(atom_list):
+            if not atom1_name:
+                continue
+            atom1_radius = van_der_waals_radius[atom1_name[0]]
+            for atom2_idx, atom2_name in enumerate(atom_list):
+                if (not atom2_name) or atom1_idx == atom2_idx:
+                    continue
+                atom2_radius = van_der_waals_radius[atom2_name[0]]
+                lower = atom1_radius + atom2_radius - overlap_tolerance
+                upper = 1e10
+                restype_atom14_bond_lower_bound[restype,
+                                                atom1_idx, atom2_idx] = lower
+                restype_atom14_bond_lower_bound[restype,
+                                                atom2_idx, atom1_idx] = lower
+                restype_atom14_bond_upper_bound[restype,
+                                                atom1_idx, atom2_idx] = upper
+                restype_atom14_bond_upper_bound[restype,
+                                                atom2_idx, atom1_idx] = upper
+
+        # overwrite lower and upper bounds for bonds and angles
+        for b in residue_bonds[resname] + residue_virtual_bonds[resname]:
+            atom1_idx = atom_list.index(b.atom1_name)
+            atom2_idx = atom_list.index(b.atom2_name)
+            lower = b.length - bond_length_tolerance_factor * b.stddev
+            upper = b.length + bond_length_tolerance_factor * b.stddev
+            restype_atom14_bond_lower_bound[restype,
+                                            atom1_idx, atom2_idx] = lower
+            restype_atom14_bond_lower_bound[restype,
+                                            atom2_idx, atom1_idx] = lower
+            restype_atom14_bond_upper_bound[restype,
+                                            atom1_idx, atom2_idx] = upper
+            restype_atom14_bond_upper_bound[restype,
+                                            atom2_idx, atom1_idx] = upper
+            restype_atom14_bond_stddev[restype,
+                                       atom1_idx, atom2_idx] = b.stddev
+            restype_atom14_bond_stddev[restype,
+                                       atom2_idx, atom1_idx] = b.stddev
+    return restype_atom14_bond_lower_bound, restype_atom14_bond_upper_bound, restype_atom14_bond_stddev
