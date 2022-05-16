@@ -1,4 +1,4 @@
-# Copyright 2022 Huawei Technologies Co., Ltd
+# Copyright 2021 Huawei Technologies Co., Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,11 +23,10 @@ from setuptools.command.build_py import build_py
 
 cur_dir = os.path.dirname(os.path.realpath(__file__))
 pkg_dir = os.path.join(cur_dir, 'build')
+package_name = os.getenv('SPONGE_PACKAGE_NAME').replace("\n", "")
 package_data = {
-    '': ["*.txt"]
+    '': ["*.txt", "libs/*.so"]
 }
-
-
 
 def read_version():
     """generate python file"""
@@ -68,16 +67,14 @@ class BuildPy(build_py):
     """BuildPy."""
     def run(self):
         super().run()
-        mindsponge_dir = os.path.join(pkg_dir, 'lib', 'mindsponge')
+        mindsponge_dir = os.path.join(pkg_dir, 'libs', 'mindsponge')
         update_permissions(mindsponge_dir)
 
 
 with open('../requirements.txt', 'r') as f_requirements:
     requirements = f_requirements.readlines()
 requirements = [r.strip() for r in requirements]
-
-print(find_packages())
-setup(name='mindscience_mindsponge',
+setup(name=package_name,
       version=version,
       author='The MindSpore Authors',
       author_email='contact@mindspore.cn',
