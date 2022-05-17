@@ -1,0 +1,26 @@
+project(neighbor_list)
+if(${ENABLE_D} STREQUAL "ON")
+    set(backend cpu)
+    file(GLOB_RECURSE CURRENT_HEADERS ${backend}/*.h)
+    file(GLOB_RECURSE CURRENT_SOURCES ${backend}/*.cpp)
+    source_group("Include" FILES ${CURRENT_HEADERS})
+    source_group("Source" FILES ${CURRENT_SOURCES})
+    message("File is ${CURRENT_SOURCES}")
+    add_library(neighbor_list SHARED ${CURRENT_HEADERS} ${CURRENT_SOURCES})
+endif()
+
+if(${ENABLE_GPU} STREQUAL "ON")
+    set(backend gpu)
+    find_package(CUDA)
+    if(NOT CUDA_FOUND)
+    message(STATUS "CUDA not found. Project will not be built.")
+    endif()
+    file(GLOB_RECURSE CURRENT_HEADERS  ${backend}/*.cuh)
+    file(GLOB CURRENT_SOURCES ${backend}/*.cu)
+
+    source_group("Include" FILES ${CURRENT_HEADERS})
+    source_group("Source" FILES ${CURRENT_SOURCES})
+
+    cuda_add_library(neighbor_list SHARED ${CURRENT_HEADERS} ${CURRENT_SOURCES})
+endif()
+

@@ -1,2 +1,3 @@
 numpy >= 1.17.0
 biopython >= 1.79
+parmed >= 3.4.3
