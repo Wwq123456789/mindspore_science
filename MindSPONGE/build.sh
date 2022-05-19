@@ -79,7 +79,8 @@ checkopts()
   if [[ "X$DEVICE" == "Xd" || "X$DEVICE" == "Xascend" ]]; then
     ENABLE_D="on"
   elif [[ "X$DEVICE" == "Xgpu" ]]; then
-      ENABLE_GPU="on"
+    ENABLE_D="off"
+    ENABLE_GPU="on"
   fi
 }
 
@@ -87,20 +88,26 @@ build_mindsponge()
 {
   echo "---------------- MindSPONGE: build start ----------------"
   mk_new_dir "${BASEPATH}/build/"
-  if [[ "X$ENABLE_D" = "Xon" ]]; then
-    echo "build ascend backend"
-    export SPONGE_PACKAGE_NAME=mindscience_sponge_ascend
-    CMAKE_FLAG="-DENABLE_D=ON"
-  fi
-  if [[ "X$ENABLE_GPU" = "Xon" ]]; then
-    echo "build gpu backend"
-    export SPONGE_PACKAGE_NAME=mindscience_sponge_gpu
-    CMAKE_FLAG="-DENABLE_GPU ON"
-  fi
   mk_new_dir "${OUTPUT_PATH}"
   cp -r "${BASEPATH}/mindsponge/python/" "${BASEPATH}/build/mindsponge/"
   cp "${BASEPATH}/setup.py" "${BASEPATH}/build/"
   cd "${BASEPATH}/build/"
+  if [[ "X$ENABLE_D" == "Xon" ]]; then
+    echo "build ascend backend"
+    export SPONGE_PACKAGE_NAME=mindscience_sponge_ascend
+    CMAKE_FLAG="-DENABLE_D=ON"
+    cp -r "${BASEPATH}/build/mindsponge/core/ops/cpu/." "${BASEPATH}/build/mindsponge/core/ops"
+    rm -rf "${BASEPATH}/build/mindsponge/core/ops/cpu"
+    rm -rf "${BASEPATH}/build/mindsponge/core/ops/gpu"
+  fi
+  if [[ "X$ENABLE_GPU" == "Xon" ]]; then
+    echo "build gpu backend"
+    export SPONGE_PACKAGE_NAME=mindscience_sponge_gpu
+    CMAKE_FLAG="-DENABLE_GPU=ON"
+    cp -r "${BASEPATH}/build/mindsponge/core/ops/gpu/." "${BASEPATH}/build/mindsponge/core/ops"
+    rm -rf "${BASEPATH}/build/mindsponge/core/ops/cpu"
+    rm -rf "${BASEPATH}/build/mindsponge/core/ops/gpu"
+  fi
   cmake .. ${CMAKE_FLAG}
   make
   ${PYTHON} ./setup.py bdist_wheel

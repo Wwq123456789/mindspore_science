@@ -12,14 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""Simulation"""
-from .simulator import Simulation
-from . import partition
-from . import ops
-from .partition import *
-from .ops import *
+"""NeighborListOP"""
 
-__all__ = []
-__all__.extend(partition.__all__)
-__all__.extend(ops.__all__)
+from .neighborlistop import NeighborListOP
+__all__ = ['NeighborListOP']
+
 __all__.sort()

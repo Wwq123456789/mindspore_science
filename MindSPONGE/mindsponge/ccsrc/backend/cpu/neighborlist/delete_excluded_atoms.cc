@@ -54,7 +54,8 @@ static void Delete_Excluded_Atoms(const int atom_numbers, const int max_neighbor
               i = i - 1;
             }
           }
-          if (excluded_atom_numbers_count >= excluded_atom_numbers_lin) {
+          if (excluded_atom_numbers_count < excluded_atom_numbers_lin) {
+          } else {
             break;
           }
         }
