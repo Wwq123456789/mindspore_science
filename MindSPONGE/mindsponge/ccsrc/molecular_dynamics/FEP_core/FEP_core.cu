@@ -1,3 +1,19 @@
+/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "FEP_core.cuh"
 
 #define TRAJ_COMMAND "crd"
@@ -31,7 +47,6 @@ static __global__ void Seperate_Direct_Atom_Energy_CUDA(
     float ene_lin_intersys = 0., ene_lin_intrasys = 0.;
 
     for (int j = threadIdx.y; j < N; j = j + blockDim.y) {
-
       atom_j = nl_i.atom_serial[j];
       r2 = uint_crd[atom_j];
       mask_j = subsys_mask[atom_j];
@@ -45,7 +60,6 @@ static __global__ void Seperate_Direct_Atom_Energy_CUDA(
 
       dr2 = dr.x * dr.x + dr.y * dr.y + dr.z * dr.z;
       if (dr2 < cutoff_square) {
-
         dr_abs = norm3df(dr.x, dr.y, dr.z);
         ene_temp = charge_i * charge[atom_j] * erfcf(beta * dr_abs) / dr_abs;
 
@@ -54,7 +68,6 @@ static __global__ void Seperate_Direct_Atom_Energy_CUDA(
         else
           ene_lin_intersys += ene_temp;
       }
-
     } // atom_j cycle
     atomicAdd(&direct_ene_intersys[atom_i], ene_lin_intersys);
     atomicAdd(&direct_ene_intrasys[atom_i], ene_lin_intrasys);
@@ -270,7 +283,7 @@ void FEP_CORE::trajectory_input::Initial(CONTROLLER *controller,
   if (controller[0].Command_Exist("frame_numbers")) {
     frame_numbers = atoi(controller[0].Command("frame_numbers"));
   } else {
-    printf("	warning: missing value of frame numbers, set to default "
+    printf("    warning: missing value of frame numbers, set to default "
            "1000.\n");
     frame_numbers = 1000;
   }
@@ -279,14 +292,14 @@ void FEP_CORE::trajectory_input::Initial(CONTROLLER *controller,
   if (controller[0].Command_Exist(TRAJ_COMMAND)) {
     Open_File_Safely(&crd_traj, controller[0].Command(TRAJ_COMMAND), "rb");
   } else {
-    printf("	Error: missing trajectory file.\n");
+    printf("    Error: missing trajectory file.\n");
     getchar();
     exit(1);
   }
   if (controller[0].Command_Exist(BOX_COMMAND)) {
     Open_File_Safely(&box_traj, controller[0].Command(BOX_COMMAND), "r");
   } else {
-    printf("	Error: missing box trajectory file.\n");
+    printf("    Error: missing box trajectory file.\n");
     getchar();
     exit(1);
   }
@@ -297,12 +310,12 @@ void FEP_CORE::trajectory_input::Initial(CONTROLLER *controller,
 }
 
 void FEP_CORE::Initial(CONTROLLER *controller) {
-  controller[0].printf("START InitialZING FEP CORE:\n");
+  controller[0].printf("START Initializing FEP CORE:\n");
 
   if (controller[0].Command_Exist("atom_numbers")) {
     atom_numbers = atoi(controller[0].Command("atom_numbers"));
   } else {
-    printf("	Error: missing value of atom numbers.\n");
+    printf("    Error: missing value of atom numbers.\n");
     getchar();
     exit(1);
   }
@@ -314,7 +327,7 @@ void FEP_CORE::Initial(CONTROLLER *controller) {
   if (controller[0].Command_Exist("charge_pertubated")) {
     charge_pertubated = atoi(controller[0].Command("charge_pertubated"));
   } else {
-    printf("	Warning: missing value of charge pertubated, set to default "
+    printf("    Warning: missing value of charge perturbed, set to default "
            "0.\n");
     charge_pertubated = 0;
   }
@@ -426,7 +439,7 @@ void FEP_CORE::Initial(CONTROLLER *controller) {
     data.temperature = atof(controller[0].Command("target_temperature"));
   data.pressure *= CONSTANT_PRES_CONVERTION_INVERSE;
 
-  printf("END InitialZING FEP CORE\n\n");
+  printf("END Initializing FEP CORE\n\n");
 }
 
 void FEP_CORE::FEP_Core_Crd_To_Uint_Crd() {

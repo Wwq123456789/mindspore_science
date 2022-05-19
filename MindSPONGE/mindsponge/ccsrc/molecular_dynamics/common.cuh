@@ -1,13 +1,29 @@
-﻿#ifndef COMMON_CUH
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef COMMON_CUH
 #define COMMON_CUH
-#include "cuda_runtime.h"
-#include "curand_kernel.h"
-#include "device_launch_parameters.h"
-#include "thrust/sort.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include "cuda_runtime.h"
+#include "curand_kernel.h"
+#include "device_launch_parameters.h"
+#include "thrust/sort.h"
 //存储各种常数
 //圆周率
 #define CONSTANT_Pi 3.1415926535897932f

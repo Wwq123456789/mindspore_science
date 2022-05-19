@@ -16,9 +16,9 @@
 
 #ifndef MD_CORE_CUH
 #define MD_CORE_CUH
+#include <deque>
 #include "../common.cuh"
 #include "../control.cuh"
-#include <deque>
 
 //普通分子模拟所涉及的大部分信息
 struct MD_INFORMATION {
@@ -124,7 +124,6 @@ struct MD_INFORMATION {
     float Get_Atom_Temperature(); //自由度还有问题
 
     void Initial(CONTROLLER *controller, MD_INFORMATION *md_info);
-
   } sys; // 系统整体信息
   struct non_bond_information {
     MD_INFORMATION *md_info = NULL;
@@ -138,7 +137,6 @@ struct MD_INFORMATION {
     int *h_excluded_list;       //剔除表
     int *h_excluded_numbers;    //记录每个原子需要剔除的原子个数
     void Initial(CONTROLLER *controller, MD_INFORMATION *md_info);
-
   } nb; // 非键信息
   struct periodic_box_condition_information {
     VECTOR crd_to_uint_crd_cof;         //实坐标到整数坐标

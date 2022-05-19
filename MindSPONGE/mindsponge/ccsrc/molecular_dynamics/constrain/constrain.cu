@@ -1,4 +1,20 @@
-﻿#include "constrain.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "constrain.cuh"
 
 void CONSTRAIN::Initial_Constrain(CONTROLLER *controller,
                                   const int atom_numbers, const float dt,
@@ -118,8 +134,8 @@ void CONSTRAIN::Add_HBond_To_Constrain_Pair(
     mass_a = atom_mass[atom_a[i]];
     mass_b = atom_mass[atom_b[i]];
     if ((mass_a < constrain_mass && mass_a > 0) ||
-        (mass_b < constrain_mass && mass_b > 0)) //含有H原子的bond
-    {
+        (mass_b < constrain_mass && mass_b > 0)) {
+      //含有H原子的bond
       h_bond_pair[s].atom_i_serial = atom_a[i];
       h_bond_pair[s].atom_j_serial = atom_b[i];
       h_bond_pair[s].constant_r = bond_r[i];
@@ -159,8 +175,8 @@ void CONSTRAIN::Add_HAngle_To_Constrain_Pair(
     mass_c = atom_mass[atom_c[i]];
     if ((mass_a < constrain_mass && mass_a > 0) ||
         (mass_c < constrain_mass &&
-         mass_c > 0)) //含有H原子的angle,假设氢原子不会在角中心。
-    {
+         mass_c > 0)) {
+      //含有H原子的angle,假设氢原子不会在角中心。
       h_angle_pair[s].atom_i_serial = atom_a[i]; //固定angle两端的两个点
       h_angle_pair[s].atom_j_serial = atom_c[i];
 

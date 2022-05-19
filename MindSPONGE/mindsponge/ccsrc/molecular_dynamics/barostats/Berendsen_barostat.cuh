@@ -16,9 +16,9 @@
 
 #ifndef BERENDSEN_BAROSTAT_CUH
 #define BERENDSEN_BAROSTAT_CUH
+#include <random>
 #include "../common.cuh"
 #include "../control.cuh"
-#include <random>
 
 //用于记录与计算Berendsen控压相关的信息
 struct BERENDSEN_BAROSTAT_INFORMATION {

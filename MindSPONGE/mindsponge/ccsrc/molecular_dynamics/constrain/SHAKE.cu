@@ -1,4 +1,20 @@
-﻿#include "SHAKE.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "SHAKE.cuh"
 
 static __global__ void
 Constrain_Force_Cycle(const int constrain_pair_numbers,
@@ -135,7 +151,6 @@ Refresh_Crd_Vel(const int atom_numbers, const float dt_inverse, const float dt,
 void SHAKE::Initial_Simple_Constrain(CONTROLLER *controller,
                                      CONSTRAIN *constrain,
                                      const char *module_name) {
-
   //从传入的参数复制基本信息
   this->constrain = constrain;
   if (module_name == NULL) {
@@ -243,7 +258,6 @@ void SHAKE::Constrain(VECTOR *crd, VECTOR *vel, const float *mass_inverse,
       Reset_List<<<1, 1>>>(1, d_virial, 0.0f);
     }
     for (int i = 0; i < iteration_numbers; i = i + 1) {
-
       Refresh_Uint_Crd<<<ceilf((float)constrain->atom_numbers / 128), 128>>>(
           constrain->atom_numbers, crd, constrain->quarter_crd_to_uint_crd_cof,
           test_uint_crd, constrain_frc, mass_inverse, constrain->x_factor);

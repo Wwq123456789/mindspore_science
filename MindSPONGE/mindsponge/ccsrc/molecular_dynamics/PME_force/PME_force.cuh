@@ -17,9 +17,9 @@
 #ifndef PME_H
 #define PME_H
 
+#include <cufft.h>
 #include "../common.cuh"
 #include "../control.cuh"
-#include <cufft.h>
 
 struct Particle_Mesh_Ewald {
   char module_name[CHAR_LENGTH_MAX];
@@ -114,8 +114,8 @@ struct Particle_Mesh_Ewald {
       int need_virial, int need_energy, float *d_virial, float *d_potential);
 
   // float Get_Energy(const UNSIGNED_INT_VECTOR *uint_crd, const float *charge,
-  //	const ATOM_GROUP *nl, const VECTOR scaler,
-  //	const int *excluded_list_start, const int *excluded_list, const int
+  // const ATOM_GROUP *nl, const VECTOR scaler,
+  // const int *excluded_list_start, const int *excluded_list, const int
   //*excluded_atom_numbers, int is_download = 1);
 
   float Get_Energy(const UNSIGNED_INT_VECTOR *uint_crd, const float *charge,

@@ -1,4 +1,20 @@
-﻿#include "bond_soft.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "bond_soft.cuh"
 
 static __global__ void Soft_Bond_Force_With_Atom_Energy_And_Virial_CUDA(
     const int bond_numbers, const UNSIGNED_INT_VECTOR *uint_crd,
@@ -180,15 +196,15 @@ void BOND_SOFT::Memory_Allocate() {
            "BOND_SOFT::h_sigma_of_soft_bond_ene in BOND_SOFT::Memory_Allocate");
   if (!Malloc_Safely((void **)&(this->h_soft_bond_dH_dlambda),
                      sizeof(float) * this->soft_bond_numbers))
-    printf("		Error occurs when malloc "
+    printf("        Error occurs when malloc "
            "BOND_SOFT::h_soft_bond_dH_dlambda in BOND_SOFT::Memory_Allocate");
   if (!Malloc_Safely((void **)&(this->h_sigma_of_dH_dlambda), sizeof(float)))
-    printf("		Error occurs when malloc "
+    printf("       Error occurs when malloc "
            "BOND_SOFT::h_sigma_of_dH_dlambda in BOND_SOFT::Memory_Allocate");
 
   if (!Cuda_Malloc_Safely((void **)&this->d_atom_a,
                           sizeof(int) * this->soft_bond_numbers))
-    printf("        Error occurs when CUDA malloc BOND_SOFT::d_atom_a in "
+    printf("       Error occurs when CUDA malloc BOND_SOFT::d_atom_a in "
            "BOND_SOFT::Memory_Allocate");
   if (!Cuda_Malloc_Safely((void **)&this->d_atom_b,
                           sizeof(int) * this->soft_bond_numbers))
@@ -216,10 +232,10 @@ void BOND_SOFT::Memory_Allocate() {
            "BOND_SOFT::d_sigma_of_bond_ene in BOND_SOFT::Memory_Allocate");
   if (!Cuda_Malloc_Safely((void **)&this->d_soft_bond_dH_dlambda,
                           sizeof(float) * this->soft_bond_numbers))
-    printf("		Error occurs when CUDA malloc "
+    printf("        Error occurs when CUDA malloc "
            "BOND_SOFT::d_soft_bond_dH_dlambda in BOND_SOFT::Memory_Allocate");
   if (!Cuda_Malloc_Safely((void **)&this->d_sigma_of_dH_dlambda, sizeof(float)))
-    printf("		Error occurs when CUDA malloc "
+    printf("        Error occurs when CUDA malloc "
            "BOND_SOFT::d_sigma_of_dH_dlambda in BOND_SOFT::Memory_Allocate");
 }
 

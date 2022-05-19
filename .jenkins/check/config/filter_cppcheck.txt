@@ -2,8 +2,3 @@
 "mindscience/MindElec/mindelec/ccsrc/api/python/pybind_register.cc"                                 "syntaxError"
 "mindscience/MindElec/mindelec/ccsrc/scientific_compute/pointcloud/material_analyse.cc"             "useStlAlgorithm"
 "mindscience/MindElec/mindelec/ccsrc/scientific_compute/pointcloud/tensor_initializer.cc"           "useStlAlgorithm"
-#MindSPONGE
-"mindscience/MindSPONGE/mindsponge/ccsrc/molecular_dynamics/constrain/SETTLE.cu"                    "whitespace/comments"
-
-
-

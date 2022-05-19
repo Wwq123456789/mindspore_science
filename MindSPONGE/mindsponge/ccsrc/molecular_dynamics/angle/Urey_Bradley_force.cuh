@@ -45,3 +45,4 @@ struct UREY_BRADLEY {
 };
 
 #endif // UREY_BRADLEY_FORCE_CUH(Urey_Bradley_force.cuh)
+

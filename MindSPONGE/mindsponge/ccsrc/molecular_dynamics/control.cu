@@ -1,4 +1,20 @@
-﻿#include "control.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "control.cuh"
 
 #define SPONGE_VERSION "v1.2.5.0 2022-04-01"
 
@@ -44,7 +60,6 @@ bool CONTROLLER::Command_Exist(const char *key) {
     if (commands.count(key)) {
       return true;
     } else if (Command_Exist("default_in_file_prefix")) {
-
       char buffer[CHAR_LENGTH_MAX], buffer2[CHAR_LENGTH_MAX];
       strcpy(buffer, key);
 
@@ -156,8 +171,9 @@ void CONTROLLER::Arguments_Parse(int argc, char **argv) {
           strcat(temp2, " ");
           strcat(temp2, temp3);
           j++;
-        } else
+        } else {
           break;
+        }
       }
       Set_Command(temp1 + 1, temp2);
     }
@@ -165,7 +181,6 @@ void CONTROLLER::Arguments_Parse(int argc, char **argv) {
 }
 
 void CONTROLLER::Get_Command(char *line, char *prefix) {
-
   if ((prefix[0] == '#' && prefix[1] == '#') || prefix[0] == ' ' ||
       prefix[0] == '\t') {
     return;
@@ -186,15 +201,15 @@ void CONTROLLER::Get_Command(char *line, char *prefix) {
 }
 
 void CONTROLLER::Commands_From_In_File(int argc, char **argv) {
-
   FILE *In_File = NULL;
   if (!Command_Exist(MDIN_COMMAND)) {
     In_File = fopen(MDIN_DEFAULT_FILENAME, "r");
     if (In_File == NULL) {
       commands["md_name"] = "Default SPONGE MD Task Name";
     }
-  } else
+  } else {
     Open_File_Safely(&In_File, Command(MDIN_COMMAND), "r");
+  }
   if (In_File != NULL) {
     char line[CHAR_LENGTH_MAX];
     char prefix[CHAR_LENGTH_MAX] = {0};

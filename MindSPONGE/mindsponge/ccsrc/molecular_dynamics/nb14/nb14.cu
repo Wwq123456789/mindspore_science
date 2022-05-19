@@ -1,4 +1,21 @@
-﻿#include "nb14.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "nb14.cuh"
+
 #define TINY 1e-10
 
 static __global__ void
@@ -395,7 +412,7 @@ void NON_BOND_14::Read_Information_From_AMBERFILE(const char *file_name,
 
     if (strcmp(temp_first_str, "%FLAG") == 0 &&
         strcmp(temp_second_str, "SCEE_SCALE_FACTOR") == 0) {
-      controller.printf("\tread dihedral 1-4 CF scale factor\n");
+      controller.printf("\t read dihedral 1-4 CF scale factor\n");
       char *get_ret = fgets(temps, CHAR_LENGTH_MAX, parm);
       for (i = 0; i < dihedral_type_numbers; i++) {
         int scanf_ret = fscanf(parm, "%f", &cf_scale_type_cpu[i]);
@@ -403,7 +420,7 @@ void NON_BOND_14::Read_Information_From_AMBERFILE(const char *file_name,
     }
     if (strcmp(temp_first_str, "%FLAG") == 0 &&
         strcmp(temp_second_str, "SCNB_SCALE_FACTOR") == 0) {
-      controller.printf("\tread dihedral 1-4 LJ scale factor\n");
+      controller.printf("\t read dihedral 1-4 LJ scale factor\n");
       char *get_ret = fgets(temps, CHAR_LENGTH_MAX, parm);
       for (i = 0; i < dihedral_type_numbers; i++)
         int scanf_ret = fscanf(parm, "%f", &lj_scale_type_cpu[i]);

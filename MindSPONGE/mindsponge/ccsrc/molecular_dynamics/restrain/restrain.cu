@@ -1,4 +1,20 @@
-﻿#include "restrain.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "restrain.cuh"
 
 //读取rst7
 static void Import_Information_From_Rst7(const char *file_name,
@@ -54,7 +70,7 @@ static void Import_Information_From_Rst7(const char *file_name,
              cudaMemcpyHostToDevice);
   cudaMemcpy(vel[0], h_vel, sizeof(VECTOR) * atom_numbers[0],
              cudaMemcpyHostToDevice);
-  // in some fuck rst7, the coordinates will be extremly bad, so need a full box
+  // in some rst7, the coordinates will be extremely bad, so need a full box
   // map
   for (int i = 0; i < 10; i = i + 1) {
     Crd_Periodic_Map<<<ceilf((float)atom_numbers[0] / 32), 32>>>(

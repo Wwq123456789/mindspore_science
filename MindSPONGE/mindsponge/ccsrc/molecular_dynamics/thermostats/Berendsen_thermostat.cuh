@@ -16,9 +16,9 @@
 
 #ifndef BERENDSEN_THERMOSTAT_CUH
 #define BERENDSEN_THERMOSTAT_CUH
+#include <random>
 #include "../common.cuh"
 #include "../control.cuh"
-#include <random>
 
 //用于记录与计算Berendsen控温相关的信息
 struct BERENDSEN_THERMOSTAT_INFORMATION {

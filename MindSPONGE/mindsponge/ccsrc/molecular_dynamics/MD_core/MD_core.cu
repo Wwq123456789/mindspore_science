@@ -1,4 +1,20 @@
-﻿#include "MD_core.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "MD_core.cuh"
 
 #define BOX_TRAJ_COMMAND "box"
 #define BOX_TRAJ_DEFAULT_FILENAME "mdbox.txt"
@@ -710,9 +726,7 @@ void MD_INFORMATION::residue_information::Initial(CONTROLLER *controller,
     if (controller[0].Command_Exist("amber_parm7")) {
       Read_AMBER_Parm7(controller[0].Command("amber_parm7"), controller[0]);
       is_initialized = 1;
-    }
-    //对于没有residue输入的模拟，默认每个粒子作为一个residue
-    else {
+    } else {
       residue_numbers = md_info->atom_numbers;
       controller->printf("    Set default residue list:\n");
       controller->printf("        residue_numbers is %d\n", residue_numbers);
@@ -993,7 +1007,7 @@ void MD_INFORMATION::Read_Mass(CONTROLLER *controller) {
     }
   } else {
     controller[0].printf(
-        "    Error: failed to initialze mass, because no atom_numbers found\n");
+        "    Error: failed to initialize mass, because no atom_numbers found\n");
     getchar();
     exit(1);
   }
@@ -1080,7 +1094,7 @@ void MD_INFORMATION::Read_Charge(CONTROLLER *controller) {
       h_charge[i] = 0;
     }
   } else {
-    controller[0].printf("    Error: failed to initialze charge, because no "
+    controller[0].printf("    Error: failed to initialize charge, because no "
                          "atom_numbers found\n");
     getchar();
     exit(1);
@@ -1093,7 +1107,7 @@ void MD_INFORMATION::Read_Charge(CONTROLLER *controller) {
 
 // MD_INFORMATION成员函数
 void MD_INFORMATION::Initial(CONTROLLER *controller) {
-  controller->printf("START INITIALZING MD CORE:\n");
+  controller->printf("START INITIALIZING MD CORE:\n");
   atom_numbers = 0; //初始化，使得能够进行所有原子数目是否相等的判断
 
   strcpy(md_name, controller[0].Command("md_name"));
@@ -1127,7 +1141,7 @@ void MD_INFORMATION::Initial(CONTROLLER *controller) {
   is_initialized = 1;
   controller->printf("    structure last modify date is %d\n",
                      last_modify_date);
-  controller->printf("END INITIALZING MD CORE\n\n");
+  controller->printf("END INITIALIZING MD CORE\n\n");
 }
 
 void MD_INFORMATION::Atom_Information_Initial() {
@@ -1260,7 +1274,7 @@ void MD_INFORMATION::Read_Rst7(const char *file_name, int irest,
              cudaMemcpyHostToDevice);
   cudaMemcpy(this->vel, this->velocity, sizeof(VECTOR) * this->atom_numbers,
              cudaMemcpyHostToDevice);
-  // in some bad rst7, the coordinates will be extremly bad, so need a full box
+  // in some bad rst7, the coordinates will be extremely bad, so need a full box
   // map
   for (int i = 0; i < 10; i = i + 1) {
     Crd_Periodic_Map<<<ceilf((float)this->atom_numbers / 32), 32>>>(
@@ -1286,8 +1300,7 @@ void MD_INFORMATION::trajectory_output::Append_Frc_Traj_File(FILE *fp) {
   if (md_info->is_initialized) {
     cudaMemcpy(md_info->force, md_info->frc,
                sizeof(VECTOR) * md_info->atom_numbers, cudaMemcpyDeviceToHost);
-    if (fp == NULL) //默认的frc输出位置
-    {
+    if (fp == NULL) {
       fp = frc_traj;
       if (fp != NULL) {
         fwrite(&md_info->force[0].x, sizeof(VECTOR), md_info->atom_numbers, fp);
@@ -1301,8 +1314,7 @@ void MD_INFORMATION::trajectory_output::Append_Vel_Traj_File(FILE *fp) {
   if (md_info->is_initialized) {
     cudaMemcpy(md_info->velocity, md_info->vel,
                sizeof(VECTOR) * md_info->atom_numbers, cudaMemcpyDeviceToHost);
-    if (fp == NULL) //默认的vel输出位置
-    {
+    if (fp == NULL) {
       fp = vel_traj;
       if (fp != NULL) {
         fwrite(&md_info->velocity[0].x, sizeof(VECTOR), md_info->atom_numbers,
@@ -1530,7 +1542,6 @@ void MD_INFORMATION::RERUN_information::Initial(CONTROLLER *controller,
     controller->printf("    Start initializing rerun:\n");
     if (!Open_File_Safely(&traj_file, controller->Command(TRAJ_COMMAND),
                           "rb")) {
-
       controller->printf("        Rerun need trajectory!\n");
       exit(1);
     } else {
@@ -1688,7 +1699,6 @@ float MD_INFORMATION::system_information::Get_Pressure(int is_download) {
 }
 
 float MD_INFORMATION::system_information::Get_Potential(int is_download) {
-
   Add_Sum_List<<<1, 1024>>>(md_info->atom_numbers, md_info->d_atom_energy,
                             d_potential);
 
@@ -1757,8 +1767,8 @@ void MD_INFORMATION::molecule_information::Initial(CONTROLLER *controller,
     for (int j = md_info->nb.h_excluded_list_start[i] +
                  md_info->nb.h_excluded_numbers[i] - 1;
          j >= md_info->nb.h_excluded_list_start[i];
-         j--) //这里使用倒序是因为链表构建是用的头插法
-    {
+         j--) {
+      //这里使用倒序是因为链表构建是用的头插法
       atom_j = md_info->nb.h_excluded_list[j];
       edge_next[edge_count] = first_edge[atom_i];
       first_edge[atom_i] = edge_count;

@@ -1,4 +1,20 @@
-﻿#include "SETTLE.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "SETTLE.cuh"
 
 //对几何信息进行转化
 //输入：rAB、rAC、rBC：三角形三边长
@@ -290,7 +306,6 @@ void SETTLE::Initial(CONTROLLER *controller, CONSTRAIN *constrain,
     controller->printf("    rigid triangle numbers is %d\n", triangle_numbers);
     controller->printf("    rigid pair numbers is %d\n", pair_numbers);
     if (triangle_numbers > 0 || pair_numbers > 0) {
-
       Malloc_Safely((void **)&h_triangles,
                     sizeof(CONSTRAIN_TRIANGLE) * triangle_numbers);
       Cuda_Malloc_Safely((void **)&d_triangles,
@@ -323,7 +338,7 @@ void SETTLE::Initial(CONTROLLER *controller, CONSTRAIN *constrain,
               h_triangles[triangle_i].rb, h_triangles[triangle_i].rc,
               h_triangles[triangle_i].rd, h_triangles[triangle_i].re);
           // printf("%d %d %d %f %f %f\n", i, linker_atoms[2 * i],
-          // linker_atoms[2 * i + 1], 	link_r[3 * i], link_r[3 * i + 1], link_r[3
+          // linker_atoms[2 * i + 1], link_r[3 * i], link_r[3 * i + 1], link_r[3
           //* i + 2]);
           triangle_i++;
         }
@@ -356,7 +371,6 @@ void SETTLE::Initial(CONTROLLER *controller, CONSTRAIN *constrain,
       for (int i = 0; i < constrain->constrain_pair_numbers; i++) {
         pair = constrain->h_constrain_pair[i];
         atom_i = pair.atom_i_serial;
-        ;
         if (linker_numbers[atom_i] > 0) {
           new_h_constrain_pair[new_pair_i] = pair;
           new_pair_i++;

@@ -1,4 +1,20 @@
-﻿#include "LJ_soft_core.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "LJ_soft_core.cuh"
 
 #define TWO_DIVIDED_BY_SQRT_PI 1.1283791670218446
 #define ONE_DIVIDED_BY_3_SQRT_PI 0.18806319451591877
@@ -1575,7 +1591,7 @@ void LJ_SOFT_CORE::Initial(CONTROLLER *controller, float cutoff,
 
     if (controller[0].Command_Exist("subsys_division_in_file")) {
       FILE *fp = NULL;
-      controller->printf("	Start reading subsystem division "
+      controller->printf("     Start reading subsystem division "
                          "information:\n");
       Open_File_Safely(&fp, controller[0].Command("subsys_division_in_file"),
                        "r");

@@ -1,4 +1,20 @@
-﻿#include "cmap.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "cmap.cuh"
 
 //由于求导带来的系数矩阵的逆矩阵A_inv
 static const float A_inv[16][16] = {
@@ -331,9 +347,7 @@ void CMAP::Initial(CONTROLLER *controller, const char *module_name) {
 
     fclose(fp);
     is_initialized = 1;
-  }
-
-  else if (controller[0].Command_Exist("amber_parm7")) {
+  } else if (controller[0].Command_Exist("amber_parm7")) {
     Read_Information_From_AMBERFILE(controller[0].Command("amber_parm7"),
                                     controller[0]);
   }
@@ -382,7 +396,6 @@ void CMAP::Read_Information_From_AMBERFILE(const char *file_name,
     if (strcmp(temp_first_str, "%FLAG") == 0 &&
             strcmp(temp_second_str, "CMAP_COUNT") == 0 ||
         strcmp(temp_second_str, "CHARMM_CMAP_COUNT") == 0) {
-
       //读取parm7中的"COMMENT ..."(如果存在)以及"%FORMAT(2I8)" 两行
       char *get_value = fgets(temps, CHAR_LENGTH_MAX, parm);
       if (strncmp(temps, "%COMMENT", 8) == 0)
@@ -413,7 +426,7 @@ void CMAP::Read_Information_From_AMBERFILE(const char *file_name,
       //读入全部双二面角信息并选择使用到的进行插值
       if (!Malloc_Safely((void **)&(this->grid_value),
                          sizeof(float) * (this->uniq_cmap_num) * pow(24, 2))) {
-        printf("        Error occurs when malloc CMAP grid vlaues in "
+        printf("        Error occurs when malloc CMAP grid values in "
                "CMAP::Read_Information_From_AMBERFILE");
       }
     }
@@ -682,7 +695,7 @@ void CMAP::Interpolation(int *resolution, float *grid_value,
   //                - - - - - ... - - - - -
   //           phi        .
   //                      .
-  //						.
+  //                                       .
   //                - - - - - ... - - - - -
   //规模为 resolution*resolution
   for (int k = 0; k < (this->tot_cmap_num); k++) {

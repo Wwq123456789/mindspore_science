@@ -1,4 +1,20 @@
-﻿#include "crd_molecular_map.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "crd_molecular_map.cuh"
 
 __global__ void Calculate_No_Wrap_Crd_CUDA(const int atom_numbers,
                                            const INT_VECTOR *box_map_times,
@@ -57,8 +73,8 @@ void Move_Crd_Nearest_From_Exclusions_Host(int atom_numbers, VECTOR *crd,
   for (int i = 0; i < atom_numbers; i++) {
     atom_i = i;
     for (int j = exclude_start[i] + exclude_length[i] - 1;
-         j >= exclude_start[i]; j--) //这里使用倒序是因为链表构建是用的头插法
-    {
+         j >= exclude_start[i]; j--) {
+      //这里使用倒序是因为链表构建是用的头插法
       atom_j = exclude_list[j];
       edge_next[edge_count] = first_edge[atom_i];
       first_edge[atom_i] = edge_count;

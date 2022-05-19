@@ -1,4 +1,20 @@
-﻿#include "Andersen_thermostat.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "Andersen_thermostat.cuh"
 
 static __global__ void MD_Iteration_Leap_Frog_With_Andersen(
     const int atom_numbers, const float half_dt, const float dt,
@@ -90,9 +106,9 @@ void ANDERSEN_THERMOSTAT_INFORMATION::Initial(CONTROLLER *controller,
   Malloc_Safely((void **)&h_factor, sizeof(float) * atom_numbers);
 
   for (int i = 0; i < atom_numbers; i = i + 1) {
-    if (h_mass[i] == 0)
+    if (h_mass[i] == 0) {
       h_factor[i] = 0;
-    else {
+    } else {
       h_factor[i] = factor * sqrtf(1.0 / h_mass[i]);
     }
   }

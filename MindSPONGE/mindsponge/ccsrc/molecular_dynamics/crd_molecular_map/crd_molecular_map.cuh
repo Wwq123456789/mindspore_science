@@ -16,9 +16,9 @@
 
 #ifndef COORDINATE_MOLECULAR_MAP
 #define COORDINATE_MOLECULAR_MAP
+#include <deque>
 #include "../common.cuh"
 #include "../control.cuh"
-#include <deque>
 
 // 20210420
 // 分子映射目前是用排除表构建的——存在有排除表的原子会被视为属于同一个分子

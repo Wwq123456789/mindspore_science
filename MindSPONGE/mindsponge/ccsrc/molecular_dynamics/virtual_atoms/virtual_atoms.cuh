@@ -16,9 +16,9 @@
 
 #ifndef VIRTUAL_ATOMS_CUH
 #define VIRTUAL_ATOMS_CUH
+#include <vector>
 #include "../common.cuh"
 #include "../control.cuh"
-#include <vector>
 
 // virtual atom type 0
 // x_v = x_1

@@ -1,4 +1,20 @@
-﻿#include "improper_dihedral.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "improper_dihedral.cuh"
 
 static __global__ void
 Dihedral_Energy_CUDA(const int dihedral_numbers,
@@ -12,8 +28,6 @@ Dihedral_Energy_CUDA(const int dihedral_numbers,
     int atom_j = atom_b[dihedral_i];
     int atom_k = atom_c[dihedral_i];
     int atom_l = atom_d[dihedral_i];
-
-    //		int temp_ipn = ipn[dihedral_i];
 
     float temp_pk = pk[dihedral_i];
     float temp_phi0 = phi0[dihedral_i];
@@ -105,7 +119,7 @@ static __global__ void Dihedral_Force_With_Atom_Energy_CUDA(
     float sin_phi = sinf(phi);
     float cos_phi = cosf(phi);
 
-    // Here and folloing var name "phi" corespongding to the declaration of phi
+    // Here and following var name "phi" corespongding to the declaration of phi
     // aka, the var with the comment line "PHI, pay attention to the var NAME"
     // The real dihedral = Pi - ArcCos(so-called "phi")
     // d(real dihedral) = 1/sin(real dihedral) * d(so-called  "phi")

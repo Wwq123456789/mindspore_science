@@ -1,4 +1,20 @@
-﻿#include "PME_force.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "PME_force.cuh"
 
 // constants
 #define PI 3.1415926
@@ -18,8 +34,9 @@ static float M_(float u, int n) {
     if (u > 2 || u < 0)
       return 0;
     return 1 - abs(u - 1);
-  } else
+  } else {
     return u / (n - 1) * M_(u, n - 1) + (n - u) / (n - 1) * M_(u - 1, n - 1);
+  }
 }
 
 static cufftComplex expc(cufftComplex z) {
@@ -202,7 +219,6 @@ void Particle_Mesh_Ewald::Initial(CONTROLLER *controller, int atom_numbers,
 
   float *B1 = NULL, *B2 = NULL, *B3 = NULL, *h_PME_BC = NULL, *h_PME_BC0 = NULL;
   B1 = (float *)malloc(sizeof(float) * fftx);
-  ;
   B2 = (float *)malloc(sizeof(float) * ffty);
   B3 = (float *)malloc(sizeof(float) * fftz);
   h_PME_BC0 = (float *)malloc(sizeof(float) * PME_Nfft);
@@ -453,7 +469,6 @@ static __global__ void PME_Final(int **PME_atom_near, const float *charge,
                                  const int atom_numbers) {
   int atom = blockDim.y * blockIdx.y + threadIdx.y;
   if (atom < atom_numbers) {
-
     int k, kx;
     float tempdQx, tempdQy, tempdQz, tempdx, tempdy, tempdz, tempx, tempy,
         tempz, tempdQf;
@@ -548,7 +563,6 @@ PME_Direct_Atom_Energy(const int atom_numbers, const ATOM_GROUP *nl,
     float ene_lin = 0.;
 
     for (int j = threadIdx.y; j < N; j = j + blockDim.y) {
-
       atom_j = nl_i.atom_serial[j];
       r2 = uint_crd[atom_j];
 
@@ -561,12 +575,10 @@ PME_Direct_Atom_Energy(const int atom_numbers, const ATOM_GROUP *nl,
 
       dr2 = dr.x * dr.x + dr.y * dr.y + dr.z * dr.z;
       if (dr2 < cutoff_square) {
-
         dr_abs = norm3df(dr.x, dr.y, dr.z);
         ene_temp = charge_i * charge[atom_j] * erfcf(beta * dr_abs) / dr_abs;
         ene_lin = ene_lin + ene_temp;
       }
-
     } // atom_j cycle
     atomicAdd(&direct_ene[atom_i], ene_lin);
   }
@@ -582,7 +594,6 @@ static __global__ void PME_Excluded_Force_With_Atom_Energy_Correction(
   if (atom_i < atom_numbers) {
     int excluded_numbers = excluded_atom_numbers[atom_i];
     if (excluded_numbers > 0) {
-
       int list_start = excluded_list_start[atom_i];
       int list_end = list_start + excluded_numbers;
       int atom_j;
@@ -772,7 +783,6 @@ static __global__ void PME_Excluded_Energy_Correction(
         beta_dr = pme_beta * dr_abs;
 
         ene_lin -= charge_i * charge_j * erff(beta_dr) / dr_abs;
-
       } // atom_j cycle
       atomicAdd(ene + atom_i, ene_lin);
     } // if need excluded
@@ -924,14 +934,15 @@ float Particle_Mesh_Ewald::Get_Energy(const UNSIGNED_INT_VECTOR *uint_crd,
       if (which_part == TOTAL) {
         ee_ene = reciprocal_ene + self_ene + direct_ene + correction_ene;
         return ee_ene;
-      } else if (which_part == RECIPROCAL)
+      } else if (which_part == RECIPROCAL) {
         return reciprocal_ene;
-      else if (which_part == SELF)
+      } else if (which_part == SELF) {
         return self_ene;
-      else if (which_part == DIRECT)
+      } else if (which_part == DIRECT) {
         return direct_ene;
-      else
+      } else {
         return correction_ene;
+      }
     } else {
       return 0;
     }

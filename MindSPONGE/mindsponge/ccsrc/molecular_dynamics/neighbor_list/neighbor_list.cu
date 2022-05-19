@@ -1,4 +1,20 @@
-﻿#include "neighbor_list.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "neighbor_list.cuh"
 
 static void Initial_Neighbor_Grid(GRID_POINTER **gpointer, GRID_BUCKET **bucket,
                                   int **atom_numbers_in_grid_bucket,
@@ -6,7 +22,6 @@ static void Initial_Neighbor_Grid(GRID_POINTER **gpointer, GRID_BUCKET **bucket,
                                   GRID_INFORMATION *grid_info,
                                   const int in_bucket_atom_numbers_max,
                                   VECTOR box_length) {
-
   float half_cutoff = half_cutoff_with_skin;
 
   grid_info[0].Nx = floorf(box_length.x / half_cutoff);
@@ -71,7 +86,6 @@ static void Initial_Neighbor_Grid(GRID_POINTER **gpointer, GRID_BUCKET **bucket,
           if (grid_info->Nx >= 5 || (xx >= 0 && xx < grid_info->Nx) ||
               (grid_info->Nx == 4 &&
                ((Nx == 0 && l == -1) || (Nx == 3 && l == 1)))) {
-
           } else {
             small_out = 1;
           }
@@ -87,7 +101,6 @@ static void Initial_Neighbor_Grid(GRID_POINTER **gpointer, GRID_BUCKET **bucket,
           if (grid_info->Ny >= 5 || (yy >= 0 && yy < grid_info->Ny) ||
               (grid_info->Ny == 4 &&
                ((Ny == 0 && m == -1) || (Ny == 3 && m == 1)))) {
-
           } else {
             small_out = 1;
           }
@@ -104,7 +117,6 @@ static void Initial_Neighbor_Grid(GRID_POINTER **gpointer, GRID_BUCKET **bucket,
           if (grid_info->Nz >= 5 || (zz >= 0 && zz < grid_info->Nz) ||
               (grid_info->Nz == 4 &&
                ((Nz == 0 && n == -1) || (Nz == 3 && n == 1)))) {
-
           } else {
             small_out = 1;
           }
@@ -163,21 +175,10 @@ static __global__ void Find_Atom_In_Grid_Serial(
              grid_length_inverse.x; // crd.x must < boxlength.x
     int Ny = (float)crd[atom_i].y * grid_length_inverse.y;
     int Nz = (float)crd[atom_i].z * grid_length_inverse.z;
-    /*Nx = min(Nx, 8);
-    Ny = min(Ny, 8);
-    Nz = min(Nz, 8);*/
     Nx = Nx & ((Nx - grid_N.int_x) >> 31);
     Ny = Ny & ((Ny - grid_N.int_y) >> 31);
     Nz = Nz & ((Nz - grid_N.int_z) >> 31);
     atom_in_grid_serial[atom_i] = Nz * gridxy + Ny * grid_N.int_x + Nx;
-    // 20210417 debug
-    // if (atom_in_grid_serial[atom_i] >= 729 || atom_in_grid_serial[atom_i] <
-    // 0)
-    //{
-    //	atom_in_grid_serial[atom_i] = 0;
-    //	printf("fuck %d %d %f %f %f\n",atom_i, atom_in_grid_serial[atom_i],
-    //crd[atom_i].x, crd[atom_i].y, crd[atom_i].z);
-    //}
   }
 }
 static __global__ void
@@ -195,7 +196,7 @@ Put_Atom_In_Grid_Bucket(const int atom_numbers, const int *atom_in_grid_serial,
         // 20210417 debug
         // if (a >= 64)
         //{
-        //	break;
+        // break;
         //}
         atomicCAS(&bucket_i.atom_serial[a], -1, atom_i);
         if (bucket_i.atom_serial[a] == atom_i) {
@@ -368,7 +369,6 @@ static __global__ void Delete_Excluded_Atoms_Serial_In_Neighbor_List(
             }
           }
           if (excluded_atom_numbers_count < excluded_atom_numbers_lin) {
-            ;
           } else {
             break;
           } // break
@@ -389,7 +389,6 @@ static __global__ void Refresh_Neighbor_List(
     int *excluded_list_start, int *excluded_list, int *excluded_numbers,
     float cutoff_skin_square, const int max_atom_in_grid_numbers) {
   if (refresh_sign[0] == 1) {
-
     Clear_Grid_Bucket<<<ceilf((float)grid_info.grid_numbers / thread),
                         thread>>>(grid_info.grid_numbers,
                                   atom_numbers_in_grid_bucket, bucket);
@@ -470,26 +469,6 @@ static void Refresh_Neighbor_List_No_Check(
       bucket, atom_numbers_in_grid_bucket, d_nl, cutoff_skin_square,
       max_atom_in_grid_numbers);
 
-  /*
-  Find_atom_neighbors << < {1, (unsigned int)ceilf((float)atom_numbers / 125)},
-  { 8, 125 } >> > (atom_numbers, uint_crd, uint_dr_to_dr_cof,
-          atom_in_grid_serial, gpointer, bucket, atom_numbers_in_grid_bucket,
-          d_nl, cutoff_skin_square);*/
-  /*	ATOM_GROUP *temp;
-          int *atom_temp;
-          Malloc_Safely((void**)&temp, sizeof(ATOM_GROUP));
-          Malloc_Safely((void**)&atom_temp, sizeof(int) * 800);
-          for (int i = 98274; i < atom_numbers; i++)
-          {
-                  cudaMemcpy(temp, d_nl + i, sizeof(ATOM_GROUP),
-     cudaMemcpyDeviceToHost); cudaMemcpy(atom_temp, temp->atom_serial,
-     sizeof(int) * 800, cudaMemcpyDeviceToHost); for (int j = 0; j <
-     temp->atom_numbers; j++)
-                  {
-                          printf("%d %d %d\n", i, j, atom_temp[j]);
-                  }
-          }
-          getchar();*/
   Delete_Excluded_Atoms_Serial_In_Neighbor_List<<<
       ceilf((float)atom_numbers / 32), 32>>>(
       atom_numbers, d_nl, excluded_list_start, excluded_list, excluded_numbers);
@@ -501,8 +480,7 @@ void NEIGHBOR_LIST::Neighbor_List_Update(VECTOR *crd,
                                          int *d_excluded_numbers,
                                          int forced_update, int forced_check) {
   if (is_initialized) {
-    if (forced_update) //如果强制要求更新就强制更新
-    {
+    if (forced_update) { //如果强制要求更新就强制更新
       Refresh_Neighbor_List_No_Check(
           atom_numbers, crd, old_crd, uint_crd, quarter_crd_to_uint_crd_cof,
           uint_dr_to_dr_cof, grid_info.atom_in_grid_serial, skin, box_length,
@@ -511,8 +489,7 @@ void NEIGHBOR_LIST::Neighbor_List_Update(VECTOR *crd,
           d_excluded_list, d_excluded_numbers, cutoff_with_skin_square,
           max_atom_in_grid_numbers);
     } else if (refresh_interval > 0 &&
-               !forced_check) //如果是恒步长更新且不强制要求检查是否更新
-    {
+               !forced_check) { //如果是恒步长更新且不强制要求检查是否更新
       if (refresh_count % refresh_interval == 0) {
         Refresh_Neighbor_List_No_Check(
             atom_numbers, crd, old_crd, uint_crd, quarter_crd_to_uint_crd_cof,
@@ -523,8 +500,7 @@ void NEIGHBOR_LIST::Neighbor_List_Update(VECTOR *crd,
             max_atom_in_grid_numbers);
       }
       refresh_count += 1;
-    } else //其余情况
-    {
+    } else {//其余情况
       Is_need_refresh_neighbor_list_cuda<<<ceilf((float)atom_numbers / 128),
                                            128>>>(
           atom_numbers, crd, old_crd, box_length,
@@ -568,7 +544,6 @@ void NEIGHBOR_LIST::Initial_Malloc() {
 void NEIGHBOR_LIST::Initial(CONTROLLER *controller, int md_atom_numbers,
                             VECTOR box_length, float cut, float skin,
                             const char *module_name) {
-
   if (module_name == NULL) {
     strcpy(this->module_name, "neighbor_list");
   } else {

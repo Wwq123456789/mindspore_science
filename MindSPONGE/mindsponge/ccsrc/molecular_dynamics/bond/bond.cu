@@ -1,4 +1,20 @@
-﻿#include "bond.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "bond.cuh"
 //使用bond的能量定义，对bond_numbers中的每根bond，都计算目前uint_crd,scaler下的能量并存入对应的bond_ene数组中
 static __global__ void Bond_Energy_CUDA(const int bond_numbers,
                                         const UNSIGNED_INT_VECTOR *uint_crd,
@@ -103,17 +119,13 @@ void BOND::Initial(CONTROLLER *controller, const char *module_name) {
     fclose(fp);
     Parameter_Host_To_Device();
     is_initialized = 1;
-  }
-  //从amber_parm7对应的文件中读取bond参数
-  else if (controller[0].Command_Exist("amber_parm7")) {
+  } else if (controller[0].Command_Exist("amber_parm7")) {
     controller[0].printf("START INITIALIZING BOND (amber_parm7):\n");
     Read_Information_From_AMBERFILE(controller[0].Command("amber_parm7"),
                                     controller[0]);
     if (bond_numbers > 0)
       is_initialized = 1;
-  }
-  //没有获得任何关于bond的信息
-  else {
+  } else {
     controller[0].printf("BOND IS NOT INITIALIZED\n\n");
   }
 

@@ -1,4 +1,20 @@
-﻿#include "main.cuh"
+﻿/*
+ * Copyright 2021 Gao's lab, Peking University, CCME. All rights reserved.
+ *
+ * NOTICE TO LICENSEE:
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "main.cuh"
 
 CONTROLLER controller;
 MD_INFORMATION md_info;
@@ -177,7 +193,6 @@ void Main_Clear() {
 }
 
 void Main_Calculate_Force() {
-
   if (md_info.mode == md_info.RERUN) {
     md_info.rerun.Iteration();
     Main_Box_Length_Change(md_info.rerun.box_length_change_factor);
