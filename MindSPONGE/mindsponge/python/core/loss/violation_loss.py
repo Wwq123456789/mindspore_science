@@ -41,7 +41,6 @@ def get_violation_loss(pdb_path):
     with open(pdb_path, 'r') as f:
         prot_pdb = protein.from_pdb_string(f.read())
     aatype = prot_pdb.aatype
-    seq_len = len(aatype)
     atom37_positions = prot_pdb.atom_positions.astype(np.float32)
     atom37_mask = prot_pdb.atom_mask.astype(np.float32)
 
@@ -51,9 +50,9 @@ def get_violation_loss(pdb_path):
                 'all_atom_mask': atom37_mask}
     features = make_atom14_positions(features)
 
-    features["residue_index"] = np.asarray(list(range(seq_len)))
+    features["residue_index"] = prot_pdb.residue_index
 
-    atom14_atom_exists = Tensor(features["atom14_atom_exists"]).astype(ms.float32)
+    atom14_atom_exists = Tensor(features["atom14_gt_exists"]).astype(ms.float32)
     residue_index = Tensor(features["residue_index"]).astype(ms.float32)
     residx_atom14_to_atom37 = Tensor(features["residx_atom14_to_atom37"]).astype(ms.int32)
     atom14_pred_positions = Tensor(features["atom14_gt_positions"]).astype(ms.float32)
