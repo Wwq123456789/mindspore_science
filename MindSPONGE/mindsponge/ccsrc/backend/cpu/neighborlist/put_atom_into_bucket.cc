@@ -40,13 +40,22 @@ static void Put_Atom_Into_Bucket(const int atom_numbers, const int max_atom_in_g
   for (int atom_i = 0; atom_i < atom_numbers; atom_i++) {
     int grid_serial = atom_in_grid_serial[atom_i];
     int a = atom_numbers_in_grid_bucket[grid_serial];
-    while (true) {
-      if (bucket[grid_serial * max_atom_in_grid_numbers + a] == -1) {
-        bucket[grid_serial * max_atom_in_grid_numbers + a] = atom_i;
-        atom_numbers_in_grid_bucket[grid_serial] += 1;
-      } else {
+    if (bucket[grid_serial * max_atom_in_grid_numbers + a] == -1) {
+      bucket[grid_serial * max_atom_in_grid_numbers + a] = atom_i;
+    }
+    if (bucket[grid_serial * max_atom_in_grid_numbers + a] != atom_i) {
+      while (true) {
         a = a + 1;
+        if (bucket[grid_serial * max_atom_in_grid_numbers + a] == -1) {
+          bucket[grid_serial * max_atom_in_grid_numbers + a] = atom_i;
+        }
+        if (bucket[grid_serial * max_atom_in_grid_numbers + a] == atom_i) {
+          atom_numbers_in_grid_bucket[grid_serial] = atom_numbers_in_grid_bucket[grid_serial] + 1;
+          break;
+        }
       }
+    } else {
+       atom_numbers_in_grid_bucket[grid_serial] = atom_numbers_in_grid_bucket[grid_serial] + 1;
     }
   }
 }
