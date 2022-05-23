@@ -8,7 +8,7 @@ import mindspore.numpy as mnp
 import mindspore.nn as nn
 from mindspore.common.tensor import Tensor
 
-from . import residue_constants
+from . import residue_constants, protein
 from . import r3
 
 
@@ -1229,3 +1229,24 @@ def make_atom14_positions(prot):
     prot["atom14_atom_is_ambiguous"] = (
         restype_atom14_is_ambiguous[prot["aatype"]])
     return prot
+
+
+def get_pdb_info(pdb_path):
+    """get atom positions, residue index etc. info from pdb file
+
+    """
+    with open(pdb_path, 'r') as f:
+        prot_pdb = protein.from_pdb_string(f.read())
+    aatype = prot_pdb.aatype
+    atom37_positions = prot_pdb.atom_positions.astype(np.float32)
+    atom37_mask = prot_pdb.atom_mask.astype(np.float32)
+
+    # get ground truth of atom14
+    features = {'aatype': aatype,
+                'all_atom_positions': atom37_positions,
+                'all_atom_mask': atom37_mask}
+    features = make_atom14_positions(features)
+
+    features["residue_index"] = prot_pdb.residue_index
+
+    return features
