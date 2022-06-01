@@ -537,6 +537,7 @@ restypes = [
     'S', 'T', 'W', 'Y', 'V'
 ]
 restype_order = {restype: i for i, restype in enumerate(restypes)}
+order_restype = {i: restype for i, restype in enumerate(restypes)}
 restype_num = len(restypes)  # := 20.
 
 restypes_with_x = restypes + ['X']
@@ -702,7 +703,7 @@ def _make_standard_atom_mask() -> np.ndarray:
     # +1 to account for unknown (all 0s).
     mask = np.zeros([restype_num + 1, atom_type_num], dtype=np.int32)
     for restype, restype_letter in enumerate(restypes):
-        restype_name = restype_1to3[restype_letter]
+        restype_name = restype_1to3.get(restype_letter)
         atom_names = residue_atoms[restype_name]
         for atom_name in atom_names:
             atom_type = atom_order[atom_name]
@@ -726,7 +727,7 @@ def chi_angle_atom(atom_index: int) -> np.ndarray:
         chi_angles_index[k] = indices
 
     for r in restypes:
-        res3 = restype_1to3[r]
+        res3 = restype_1to3.get(r)
         one_hot = np.eye(atom_type_num)[chi_angles_index[res3]]
         one_hots.append(one_hot)
 
@@ -789,7 +790,7 @@ restype_rigid_group_default_frame = np.zeros([21, 8, 4, 4], dtype=np.float32)
 def _make_rigid_group_constants():
     """Fill the arrays above."""
     for restype, restype_letter in enumerate(restypes):
-        resname = restype_1to3[restype_letter]
+        resname = restype_1to3.get(restype_letter)
         for atomname, group_idx, atom_position in rigid_group_atom_positions[
                 resname]:
             atomtype = atom_order[atomname]
@@ -867,7 +868,7 @@ def make_atom14_dists_bounds(overlap_tolerance=1.5, bond_length_tolerance_factor
     restype_atom14_bond_stddev = np.zeros([21, 14, 14], np.float32)
     residue_bonds, residue_virtual_bonds, _ = load_stereo_chemical_props()
     for restype, restype_letter in enumerate(restypes):
-        resname = restype_1to3[restype_letter]
+        resname = restype_1to3.get(restype_letter)
         atom_list = restype_name_to_atom14_names[resname]
 
         # create lower and upper bounds for clashes
