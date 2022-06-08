@@ -1,4 +1,4 @@
-# Copyright 2020-2021 Huawei Technologies Co., Ltd
+# Copyright 2021 The AIMM Group at Shenzhen Bay Laboratory & Peking University & Huawei Technologies Co., Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,14 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""Simulation"""
-from .simulator import Simulation
-from . import partition
-from . import ops
-from .partition import *
-from .ops import *
-
-__all__ = []
-__all__.extend(partition.__all__)
-__all__.extend(ops.__all__)
-__all__.sort()
+"""init"""

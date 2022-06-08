@@ -1,3 +1,17 @@
+# Copyright 2021 The AIMM Group at Shenzhen Bay Laboratory & Peking University & Huawei Technologies Co., Ltd
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ============================================================================
 """utils module"""
 
 import numpy as np
@@ -390,10 +404,6 @@ def atom37_to_torsion_angles(
     chis_mask = mnp.take(chi_angles_mask, aatype, axis=0)
     chi_angle_atoms_mask = P.GatherNd()(all_atom_mask, new_indices)
 
-    # chis_atom_pos = P.GatherBatch(axis=0, batch=2)(all_atom_pos, atom_indices)
-    # chis_mask = mnp.take(chi_angles_mask, aatype, axis=0)
-    # chi_angle_atoms_mask = P.GatherBatch(axis=0, batch=2)(all_atom_mask, atom_indices)
-
     # Check if all 4 chi angle atoms were set. Shape: [batch, num_res, chis=4].
     chi_angle_atoms_mask = P.ReduceProd()(chi_angle_atoms_mask, -1)
     chis_mask = chis_mask * (chi_angle_atoms_mask).astype(mnp.float32)
@@ -462,7 +472,6 @@ def to_tensor(quaternion, translation):
 def from_tensor(tensor, normalize=False):
     quaternion, tx, ty, tz = mnp.split(tensor, [4, 5, 6], axis=-1)
     return quat_affine(quaternion, mnp.stack([tx[..., 0], ty[..., 0], tz[..., 0]], axis=-1), normalize=normalize)
-    # return quat_affine(quaternion, [tx[..., 0], ty[..., 0], tz[..., 0]], normalize=normalize)
 
 
 def generate_new_affine(sequence_mask):
@@ -609,8 +618,6 @@ def rigids_mul_vecs(r, v):
 
 def vecs_from_tensor(x):  # shape (...)
     """Converts from tensor of shape (3,) to Vecs."""
-    # num_components = x.shape[-1]
-    # assert num_components == 3
     return x[..., 0], x[..., 1], x[..., 2]
 
 
@@ -758,7 +765,6 @@ def torsion_angles_to_frames(aatype, backb_to_global, torsion_angles_sin_cos, re
     # Create the global frames.
     # shape (N, 8)
     all_frames_to_global = rigids_mul_rigids(backb_to_global_new, all_frames_to_backb)
-    # all_frames_to_global = rigids_mul_rigids(all_frames_to_backb, backb_to_global)
     return all_frames_to_global
 
 
@@ -808,7 +814,6 @@ def atom14_to_atom37(atom14_data, residx_atom37_to_atom14, atom37_atom_exists, i
     new_indices = P.Concat(2)((indices0, residx_atom37_to_atom14))
 
     atom37_data = P.GatherNd()(atom14_data, new_indices)
-    # atom37_data = P.GatherBatch()(atom14_data, residx_atom37_to_atom14)
 
     if len(atom14_data.shape) == 2:
         atom37_data *= atom37_atom_exists
