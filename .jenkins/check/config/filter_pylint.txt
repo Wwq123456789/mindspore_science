@@ -75,12 +75,3 @@
 "mindscience/MindSPONGE/mindsponge/python/data/pdb_parser.py"                               "invalid-name"
 "mindscience/MindSPONGE/mindsponge/python/core/control/integrator/brownian.py"              "unexpected-keyword-arg"
 "mindscience/MindSPONGE/mindsponge/python/data/pdb_parser.py"                               "unused-import"  
-
-
-
-
-
-
-
-
-
