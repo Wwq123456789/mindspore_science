@@ -28,6 +28,6 @@
 # ============================================================================
 """partition"""
 
-from .neighborlist import NeighborList
-__all__ = ['NeighborList']
+from .neighbourlist import NeighbourList
+__all__ = ['NeighbourList']
 __all__.sort()
