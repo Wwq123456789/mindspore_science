@@ -1,32 +1,27 @@
 """violation loss calculation."""
 
 import numpy as np
-import mindspore.numpy as mnp
-import mindspore.nn as nn
+
 import mindspore as ms
-from mindspore.ops import operations as P
 from mindspore import Tensor
+from mindspore.ops import operations as P
 
-from ...common.utils import get_pdb_info
-from ...common import residue_constants
 from ..metrics.structure_violations import find_structural_violations
+from ...common import residue_constants
+from ...common.utils import get_pdb_info
 
+C_ONE_HOT = np.array([0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], np.float32)
+N_ONE_HOT = np.array([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], np.float32)
+ATOMTYPE_RADIUS = np.array([1.55, 1.7, 1.7, 1.7, 1.52, 1.7, 1.7, 1.7, 1.52, 1.52, 1.8, 1.7, 1.7, 1.7, 1.55, 1.55, 1.52,
+                            1.52, 1.8, 1.7, 1.7, 1.7, 1.7, 1.55, 1.55, 1.55, 1.52, 1.52, 1.7, 1.55, 1.55, 1.52, 1.7,
+                            1.7, 1.7, 1.55, 1.52])
+DISTS_MASK_I = np.eye(14, 14)
+LOWER_BOUND, UPPER_BOUND, RESTYPE_ATOM14_BOUND_STDDEV = \
+    residue_constants.make_atom14_dists_bounds(overlap_tolerance=1.5, bond_length_tolerance_factor=12.0)
 
 VIOLATION_TOLERANCE_ACTOR = 12.0
 CLASH_OVERLAP_TOLERANCE = 1.5
-C_ONE_HOT = nn.OneHot(depth=14)(Tensor(2, ms.int32))
-N_ONE_HOT = nn.OneHot(depth=14)(Tensor(0, ms.int32))
-DISTS_MASK_I = mnp.eye(14, 14)
-CYS_SG_IDX = Tensor(5, ms.int32)
-ATOMTYPE_RADIUS = Tensor(np.array(
-    [1.55, 1.7, 1.7, 1.7, 1.52, 1.7, 1.7, 1.7, 1.52, 1.52, 1.8, 1.7, 1.7, 1.7, 1.55, 1.55,
-     1.52, 1.52, 1.8, 1.7, 1.7, 1.7, 1.7, 1.55, 1.55, 1.55, 1.52, 1.52, 1.7, 1.55, 1.55,
-     1.52, 1.7, 1.7, 1.7, 1.55, 1.52]), ms.float32)
-LOWER_BOUND, UPPER_BOUND, RESTYPE_ATOM14_BOUND_STDDEV = \
-    residue_constants.make_atom14_dists_bounds(overlap_tolerance=1.5, bond_length_tolerance_factor=12.0)
-LOWER_BOUND = Tensor(LOWER_BOUND, ms.float32)
-UPPER_BOUND = Tensor(UPPER_BOUND, ms.float32)
-RESTYPE_ATOM14_BOUND_STDDEV = Tensor(RESTYPE_ATOM14_BOUND_STDDEV, ms.float32)
+CYS_SG_IDX = 5
 
 
 def get_violation_loss(pdb_path=None, atom14_atom_exists=None, residue_index=None, residx_atom14_to_atom37=None,
@@ -62,12 +57,20 @@ def get_violation_loss(pdb_path=None, atom14_atom_exists=None, residue_index=Non
             if isinstance(atom14_positions, np.ndarray) else atom14_positions
         aatype = Tensor(aatype).astype(ms.int32) if isinstance(aatype, np.ndarray) else aatype
 
+    lower_bound_t = Tensor(LOWER_BOUND, ms.float32)
+    upper_bound_t = Tensor(UPPER_BOUND, ms.float32)
+    atom_type_radius_t = Tensor(ATOMTYPE_RADIUS, ms.float32)
+    c_one_hot_t = Tensor(C_ONE_HOT, ms.int32)
+    n_one_hot_t = Tensor(N_ONE_HOT, ms.int32)
+    dists_mask_i_t = Tensor(DISTS_MASK_I, ms.int32)
+    cys_sg_idx_t = Tensor(CYS_SG_IDX, ms.int32)
+
     (bonds_c_n_loss_mean, angles_ca_c_n_loss_mean, angles_c_n_ca_loss_mean, _, _, _, clashes_per_atom_loss_sum,
      _, per_atom_loss_sum, _, _) = \
         find_structural_violations(atom14_atom_exists, residue_index, aatype, residx_atom14_to_atom37,
                                    atom14_positions, VIOLATION_TOLERANCE_ACTOR,
-                                   CLASH_OVERLAP_TOLERANCE, LOWER_BOUND, UPPER_BOUND, ATOMTYPE_RADIUS,
-                                   C_ONE_HOT, N_ONE_HOT, DISTS_MASK_I, CYS_SG_IDX)
+                                   CLASH_OVERLAP_TOLERANCE, lower_bound_t, upper_bound_t, atom_type_radius_t,
+                                   c_one_hot_t, n_one_hot_t, dists_mask_i_t, cys_sg_idx_t)
     num_atoms = P.ReduceSum()(atom14_atom_exists.astype(ms.float32))
     structure_violation_loss = bonds_c_n_loss_mean + angles_ca_c_n_loss_mean + angles_c_n_ca_loss_mean +\
                                P.ReduceSum()(clashes_per_atom_loss_sum + per_atom_loss_sum) / (1e-6 + num_atoms)
