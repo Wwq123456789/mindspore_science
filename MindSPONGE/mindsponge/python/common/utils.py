@@ -16,10 +16,12 @@
 
 import numpy as np
 from scipy.special import softmax
+from Bio import Align
+from Bio.Align import substitution_matrices
 
 from mindspore.ops import operations as P
 import mindspore.numpy as mnp
-import mindspore.nn as nn
+from mindspore import nn
 from mindspore.common.tensor import Tensor
 
 from . import residue_constants, protein
@@ -763,7 +765,6 @@ def torsion_angles_to_frames(aatype, backb_to_global, torsion_angles_sin_cos, re
                                              chi3_frame_to_backb, chi4_frame_to_backb)
     backb_to_global_new = reshape_back(backb_to_global)
     # Create the global frames.
-    # shape (N, 8)
     all_frames_to_global = rigids_mul_rigids(backb_to_global_new, all_frames_to_backb)
     return all_frames_to_global
 
@@ -1186,10 +1187,8 @@ def make_atom14_positions(prot):
     for resname, swap in residue_constants.residue_atom_renaming_swaps.items():
         correspondences = np.arange(14)
         for source_atom_swap, target_atom_swap in swap.items():
-            source_index = residue_constants.restype_name_to_atom14_names[
-                resname].index(source_atom_swap)
-            target_index = residue_constants.restype_name_to_atom14_names[
-                resname].index(target_atom_swap)
+            source_index = residue_constants.restype_name_to_atom14_names.get(resname).index(source_atom_swap)
+            target_index = residue_constants.restype_name_to_atom14_names.get(resname).index(target_atom_swap)
             correspondences[source_index] = target_index
             correspondences[target_index] = source_index
             renaming_matrix = np.zeros((14, 14), dtype=np.float32)
@@ -1223,10 +1222,8 @@ def make_atom14_positions(prot):
         for atom_name1, atom_name2 in swap.items():
             restype = residue_constants.restype_order[
                 residue_constants.restype_3to1[resname]]
-            atom_idx1 = residue_constants.restype_name_to_atom14_names[resname].index(
-                atom_name1)
-            atom_idx2 = residue_constants.restype_name_to_atom14_names[resname].index(
-                atom_name2)
+            atom_idx1 = residue_constants.restype_name_to_atom14_names.get(resname).index(atom_name1)
+            atom_idx2 = residue_constants.restype_name_to_atom14_names.get(resname).index(atom_name2)
             restype_atom14_is_ambiguous[restype, atom_idx1] = 1
             restype_atom14_is_ambiguous[restype, atom_idx2] = 1
 
@@ -1240,7 +1237,7 @@ def get_pdb_info(pdb_path):
     """get atom positions, residue index etc. info from pdb file
 
     """
-    with open(pdb_path, 'r') as f:
+    with open(pdb_path, 'r', encoding="UTF-8") as f:
         prot_pdb = protein.from_pdb_string(f.read())
     aatype = prot_pdb.aatype
     atom37_positions = prot_pdb.atom_positions.astype(np.float32)
@@ -1255,3 +1252,46 @@ def get_pdb_info(pdb_path):
     features["residue_index"] = prot_pdb.residue_index
 
     return features
+
+
+def get_fasta_info(pdb_path):
+    # get fasta info from pdb
+    with open(pdb_path, 'r', encoding='UTF-8') as f:
+        prot_pdb = protein.from_pdb_string(f.read())
+    aatype = prot_pdb.aatype
+    fasta = [residue_constants.order_restype.get(x) for x in aatype]
+
+    return ''.join(fasta)
+
+
+def get_aligned_seq(gt_seq, pr_seq):
+    """align two protein fasta sequence"""
+    aligner = Align.PairwiseAligner()
+    substitution_matrices.load()
+    matrix = substitution_matrices.load("BLOSUM62")
+    for i in range(len(str(matrix.alphabet))):
+        res = matrix.alphabet[i]
+        matrix['X'][res] = 0
+        matrix[res]['X'] = 0
+    aligner.substitution_matrix = matrix
+    aligner.open_gap_score = -10
+    aligner.extend_gap_score = -1
+    # many align results, get only the one w/ highest score. gt_seq as reference
+    alignments = aligner.align(gt_seq, pr_seq)
+    align = alignments[0]
+    align_str = str(align)
+    align_str_len = len(align_str)
+    point = []
+    target = ''
+    align_relationship = ''
+    query = ''
+    for i in range(align_str_len):
+        if align_str[i] == '\n':
+            point.append(i)
+    for i in range(int(point[0])):
+        target = target + align_str[i]
+    for i in range(int(point[1])-int(point[0])-1):
+        align_relationship = align_relationship + align_str[i + int(point[0])+1]
+    for i in range(int(point[2])-int(point[1])-1):
+        query = query + align_str[i + int(point[1])+1]
+    return target, align_relationship, query
