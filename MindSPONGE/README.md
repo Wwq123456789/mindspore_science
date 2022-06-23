@@ -25,7 +25,7 @@
 
 ## MindSPONGE介绍
 
-MindSPONGE(Simulation Package Of Next GEneration molecular modelling)是基于[昇思MindSporpe](https://www.mindspore.cn/)的计算生物领域套件，支持分子动力学、蛋白质折叠等常用功能，旨在于为广大的科研人员、老师及学生提供高效易用的AI计算生物软件。
+MindSPONGE(Simulation Package Of Next GEneration molecular modelling)是基于[昇思MindSpore](https://www.mindspore.cn/)的计算生物领域套件，支持分子动力学、蛋白质折叠等常用功能，旨在于为广大的科研人员、老师及学生提供高效易用的AI计算生物软件。
 
 <img src="docs/archi.png" alt="MindSPONGE Architecture" width="600"/>
 
@@ -57,11 +57,6 @@ violation = msp.metrics.violation()
 ```bash
 ```
 
-- 蛋白质结构豫驰
-
-```bash
-```
-
 - Amber文件加载
 
 ```bash
@@ -69,7 +64,7 @@ violation = msp.metrics.violation()
 
 更多应用案例请见：
 
-- [分子动力学]()
+- [蛋白质结构松弛](https://gitee.com/izayoi16/mindscience/blob/dev-md/MindSPONGE/applications/molecular_dynamics/protein_relax/protein_relax_pipeline.py)
 - [蛋白质结构预测]()
 - [蛋白质结构质量评估]()
 - [MSA引擎]()
