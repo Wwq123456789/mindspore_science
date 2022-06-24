@@ -58,7 +58,7 @@ class Oscillator(EnergyCell):
         )
         self.old_crd = old_crd
         self.k = k
-        self.nonh_mask = 1 - nonh_mask
+        self.nonh_mask = nonh_mask
 
     def calculate(self, new_crd, pbc_box=None):
         shift = new_crd - self.old_crd
@@ -107,7 +107,7 @@ class FollowedOscillator(EnergyCell):
             pbc=pbc,
         )
         self.k = k
-        self.nonh_mask = 1 - nonh_mask
+        self.nonh_mask = nonh_mask
 
     def calculate(self, old_crd, new_crd, pbc_box=None):
         shift = new_crd - old_crd

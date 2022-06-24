@@ -98,7 +98,10 @@ class Sponge():
 
         self.units = self.system.units
 
-        self.time_step = self.integrator.learning_rate.asnumpy()
+        try:
+            self.time_step = self.integrator.learning_rate.asnumpy()
+        except AttributeError:
+            self.time_step = 1.0
 
         self.coordinates = self.system.coordinates
         self.pbc_box = self.system.pbc_box

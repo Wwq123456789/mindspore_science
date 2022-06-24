@@ -31,40 +31,19 @@ def between_residue_bond(
         tolerance_factor_soft=12.0,
         tolerance_factor_hard=12.0
 ):
-    """Flat-bottom loss to penalize structural violations between residues.
-
-    This is a loss penalizing any violation of the geometry around the peptide
-    bond between consecutive amino acids. This loss corresponds to
-    Jumper et al. (2021) Suppl. Sec. 1.9.11, eq 44, 45.
-
-    Args:
-      pred_atom_positions: Atom positions in atom37/14 representation
-      pred_atom_mask: Atom mask in atom37/14 representation
-      residue_index: Residue index for given amino acid, this is assumed to be
-        monotonically increasing.
-      aatype: Amino acid type of given residue
-      tolerance_factor_soft: soft tolerance factor measured in standard deviations
-        of pdb distributions
-      tolerance_factor_hard: hard tolerance factor measured in standard deviations
-        of pdb distributions
-
-    Returns:
-        'c_n_loss_mean': Loss for peptide bond length violations
-        'ca_c_n_loss_mean': Loss for violations of bond angle around C spanned by CA, C, N
-        'c_n_ca_loss_mean': Loss for violations of bond angle around N spanned by C, N, CA
-        'per_residue_loss_sum': sum of all losses for each residue
-        'per_residue_violation_mask': mask denoting all residues with violation present.
+    """Flat-bottom loss to penalize structural violations between residues. This is a loss penalizing any violation
+     of the geometry around the peptide bond between consecutive amino acids.
     """
 
     # Get the positions of the relevant backbone atoms.
-    this_ca_pos = pred_atom_positions[:-1, 1, :]  # (N - 1, 3)
-    this_ca_mask = pred_atom_mask[:-1, 1]  # (N - 1)
-    this_c_pos = pred_atom_positions[:-1, 2, :]  # (N - 1, 3)
-    this_c_mask = pred_atom_mask[:-1, 2]  # (N - 1)
-    next_n_pos = pred_atom_positions[1:, 0, :]  # (N - 1, 3)
-    next_n_mask = pred_atom_mask[1:, 0]  # (N - 1)
-    next_ca_pos = pred_atom_positions[1:, 1, :]  # (N - 1, 3)
-    next_ca_mask = pred_atom_mask[1:, 1]  # (N - 1)
+    this_ca_pos = pred_atom_positions[:-1, 1, :]
+    this_ca_mask = pred_atom_mask[:-1, 1]
+    this_c_pos = pred_atom_positions[:-1, 2, :]
+    this_c_mask = pred_atom_mask[:-1, 2]
+    next_n_pos = pred_atom_positions[1:, 0, :]
+    next_n_mask = pred_atom_mask[1:, 0]
+    next_ca_pos = pred_atom_positions[1:, 1, :]
+    next_ca_mask = pred_atom_mask[1:, 1]
     has_no_gap_mask = ((residue_index[1:] - residue_index[:-1]) == 1.0).astype(ms.float32)
 
     # Compute loss for the C--N bond.
@@ -72,7 +51,6 @@ def between_residue_bond(
 
     # The C-N bond to proline has slightly different length because of the ring.
     next_is_proline = Tensor((aatype[1:] == residue_constants.resname_to_idx['PRO'])).astype(ms.float32)
-    # ((residue_index[1:] - residue_index[:-1]) == 1.0).astype(ms.float32)
     gt_length = ((1. - next_is_proline) * residue_constants.between_res_bond_length_c_n[0]
                  + next_is_proline * residue_constants.between_res_bond_length_c_n[1])
     gt_stddev = ((1. - next_is_proline) * residue_constants.between_res_bond_length_stddev_c_n[0] +
@@ -109,8 +87,7 @@ def between_residue_bond(
     c_n_ca_loss_mean = mnp.sum(mask * c_n_ca_loss_per_residue) / (mnp.sum(mask) + 1e-6)
     c_n_ca_violation_mask = mask * (c_n_ca_cos_angle_error > (tolerance_factor_hard * gt_stddev))
 
-    # Compute a per residue loss (equally distribute the loss to both
-    # neighbouring residues).
+    # Compute a per residue loss (equally distribute the loss to both neighbouring residues).
     per_residue_loss_sum = c_n_loss_per_residue + ca_c_n_loss_per_residue + c_n_ca_loss_per_residue
     per_residue_loss_sum = 0.5 * (mnp.pad(per_residue_loss_sum, [[0, 1]]) + mnp.pad(per_residue_loss_sum, [[1, 0]]))
 
@@ -134,138 +111,57 @@ def between_residue_clash(
         overlap_tolerance_hard,
         cys_sg_idx):
     """Loss to penalize steric clashes between residues.
-
-    This is a loss penalizing any steric clashes due to non bonded atoms in
-    different peptides coming too close. This loss corresponds to the part with
-    different residues of
-    Jumper et al. (2021) Suppl. Sec. 1.9.11, eq 46.
-
-    Args:
-      atom14_pred_positions: Predicted positions of atoms in
-        global prediction frame
-      atom14_atom_exists: Mask denoting whether atom at positions exists for given
-        amino acid type
-      atom14_atom_radius: Van der Waals radius for each atom.
-      residue_index: Residue index for given amino acid.
-      overlap_tolerance_soft: Soft tolerance factor.
-      overlap_tolerance_hard: Hard tolerance factor.
-
-    Returns:
-        'mean_loss': average clash loss
-        'per_atom_loss_sum': sum of all clash losses per atom, shape (N, 14)
-        'per_atom_clash_mask': mask whether atom clashes with any other atom shape (N, 14)
     """
 
-    # Create the distance matrix.
-    # (N, N, 14, 14)
     dists = mnp.sqrt(1e-10 + mnp.sum(
         mnp.square(atom14_pred_positions[:, None, :, None, :] - atom14_pred_positions[None, :, None, :, :]), axis=-1))
-
-    # Create the mask for valid distances.
-    # shape (N, N, 14, 14)
     dists_mask = atom14_atom_exists[:, None, :, None] * atom14_atom_exists[None, :, None, :]
-
-    # Mask out all the duplicate entries in the lower triangular matrix.
-    # Also mask out the diagonal (atom-pairs from the same residue) -- these atoms
-    # are handled separately.
     dists_mask *= (residue_index[:, None, None, None] < residue_index[None, :, None, None])
 
     # Backbone C--N bond between subsequent residues is no clash.
-
     neighbour_mask = ((residue_index[:, None, None, None] + 1) == residue_index[None, :, None, None])
     c_n_bonds = neighbour_mask * c_one_hot[None, None, :, None] * n_one_hot[None, None, None, :]
     dists_mask *= (1. - c_n_bonds)
 
     # Disulfide bridge between two cysteines is no clash.
-
     cys_sg_one_hot = nn.OneHot(depth=14)(cys_sg_idx)
     disulfide_bonds = (cys_sg_one_hot[None, None, :, None] * cys_sg_one_hot[None, None, None, :])
     dists_mask *= (1. - disulfide_bonds)
 
-    # Compute the lower bound for the allowed distances.
-    # shape (N, N, 14, 14)
     dists_lower_bound = dists_mask * (atom14_atom_radius[:, None, :, None] + atom14_atom_radius[None, :, None, :])
-
-    # Compute the error.
-    # shape (N, N, 14, 14)
     dists_to_low_error = dists_mask * nn.ReLU()(dists_lower_bound - overlap_tolerance_soft - dists)
-
-    # Compute the mean loss.
-    # shape ()
     mean_loss = mnp.sum(dists_to_low_error) / (1e-6 + mnp.sum(dists_mask))
-
-    # Compute the per atom loss sum.
-    # shape (N, 14)
     per_atom_loss_sum = P.ReduceSum()(dists_to_low_error, (0, 2)) + P.ReduceSum()(dists_to_low_error, (1, 3))
-
-    # Compute the hard clash mask.
-    # shape (N, N, 14, 14)
     clash_mask = dists_mask * (dists < (dists_lower_bound - overlap_tolerance_hard))
-
-    # Compute the per atom clash.
-    # shape (N, 14)
     per_atom_clash_mask = mnp.maximum(mnp.max(clash_mask, axis=[0, 2]), mnp.max(clash_mask, axis=[1, 3]))
 
     return mean_loss, per_atom_loss_sum, per_atom_clash_mask
 
 
 def within_residue_violations(
-        atom14_pred_positions,  # (N, 14, 3)
-        atom14_atom_exists,  # (N, 14)
-        atom14_dists_lower_bound,  # (N, 14, 14)
-        atom14_dists_upper_bound,  # (N, 14, 14)
+        atom14_pred_positions,
+        atom14_atom_exists,
+        atom14_dists_lower_bound,
+        atom14_dists_upper_bound,
         tighten_bounds_for_loss,
         dists_mask_i
 ):
     """Loss to penalize steric clashes within residues.
-
-    This is a loss penalizing any steric violations or clashes of non-bonded atoms
-    in a given peptide. This loss corresponds to the part with
-    the same residues of
-    Jumper et al. (2021) Suppl. Sec. 1.9.11, eq 46.
-
-    Args:
-      atom14_pred_positions: Predicted positions of atoms in
-        global prediction frame
-      atom14_atom_exists: Mask denoting whether atom at positions exists for given
-        amino acid type
-      atom14_dists_lower_bound: Lower bound on allowed distances.
-      atom14_dists_upper_bound: Upper bound on allowed distances
-      tighten_bounds_for_loss: Extra factor to tighten loss
-
-    Returns:
-        'per_atom_loss_sum': sum of all clash losses per atom, shape (N, 14)
-        'per_atom_clash_mask': mask whether atom clashes with any other atom shape (N, 14)
     """
 
-    # Compute the mask for each residue.
-    # shape (N, 14, 14)
     dists_masks = (1. - dists_mask_i[None])
     dists_masks *= (atom14_atom_exists[:, :, None] * atom14_atom_exists[:, None, :])
 
-    # Distance matrix
-    # shape (N, 14, 14)
     dists = mnp.sqrt(1e-10 + mnp.sum(
         mnp.square(atom14_pred_positions[:, :, None, :] - atom14_pred_positions[:, None, :, :]), axis=-1))
-
-    # Compute the loss.
-    # shape (N, 14, 14)
     dists_to_low_error = nn.ReLU()(atom14_dists_lower_bound + tighten_bounds_for_loss - dists)
     dists_to_high_error = nn.ReLU()(dists - (atom14_dists_upper_bound - tighten_bounds_for_loss))
     loss = dists_masks * (dists_to_low_error + dists_to_high_error)
-
-    # Compute the per atom loss sum.
-    # shape (N, 14)
     per_atom_loss_sum = mnp.sum(loss, axis=1) + mnp.sum(loss, axis=2)
-
-    # Compute the violations mask.
-    # shape (N, 14, 14)
     lower = (dists < atom14_dists_lower_bound).astype(ms.int32)
     high = (dists > atom14_dists_upper_bound).astype(ms.int32)
     violations = dists_masks * ((lower + high).astype(bool))
 
-    # Compute the per atom violations.
-    # shape (N, 14)
     per_atom_violations = mnp.maximum(mnp.max(violations, axis=1), mnp.max(violations, axis=2))
 
     return per_atom_loss_sum, per_atom_violations
@@ -287,13 +183,12 @@ def find_structural_violations(atom14_atom_exists, residue_index, aatype, residx
             tolerance_factor_soft=violation_tolerance_factor,
             tolerance_factor_hard=violation_tolerance_factor)
 
-    # Compute the Van der Waals radius for every atom
-    # (the first letter of the atom name is the element type).
+    # Compute the Van der Waals radius for every atom (the first letter of the atom name is the element type).
     # Shape: (N, 14).
     atom14_atom_radius = atom14_atom_exists * P.Gather()(atomtype_radius, residx_atom14_to_atom37, 0)
 
     # Compute the between residue clash loss.
-    mean_loss, per_atom_loss_sum, per_atom_clash_mask = between_residue_clash(
+    mean_loss, clashes_per_atom_loss_sum, per_atom_clash_mask = between_residue_clash(
         atom14_pred_positions=atom14_pred_positions,
         atom14_atom_exists=atom14_atom_exists,
         atom14_atom_radius=atom14_atom_radius,
@@ -326,7 +221,7 @@ def find_structural_violations(atom14_atom_exists, residue_index, aatype, residx
     connections_per_residue_loss_sum = per_residue_loss_sum
     connections_per_residue_violation_mask = per_residue_violation_mask
     clashes_mean_loss = mean_loss
-    clashes_per_atom_loss_sum = per_atom_loss_sum
+    clashes_per_atom_loss_sum = clashes_per_atom_loss_sum
     clashes_per_atom_clash_mask = per_atom_clash_mask
     per_atom_loss_sum = per_atom_loss_sum
     per_atom_violations = per_atom_violations

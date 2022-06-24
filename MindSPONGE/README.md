@@ -25,7 +25,7 @@
 
 ## MindSPONGE介绍
 
-MindSPONGE(Simulation Package Of Next GEneration molecular modelling)是基于[昇思MindSporpe](https://www.mindspore.cn/)的计算生物领域套件，支持分子动力学、蛋白质折叠等常用功能，旨在于为广大的科研人员、老师及学生提供高效易用的AI计算生物软件。
+MindSPONGE(Simulation Package Of Next GEneration molecular modelling)是基于[昇思MindSpore](https://www.mindspore.cn/)的计算生物领域套件，支持分子动力学、蛋白质折叠等常用功能，旨在于为广大的科研人员、老师及学生提供高效易用的AI计算生物软件。
 
 <img src="docs/archi.png" alt="MindSPONGE Architecture" width="600"/>
 
@@ -41,10 +41,11 @@ MindSPONGE(Simulation Package Of Next GEneration molecular modelling)是基于[�
 ```
 
 - 蛋白质 violation 计算
+    ###### 使蛋白质推理模型预测的pdb虽然在绝大多数原子上都准确预测出理想的键长和键角，然而原子间是否存在冲突以及肽键信息对于真实结构也尤为重要，violation 则计算了预测pdb的总原子间冲突程度以及肽键键长键角是否满足一定的限制条件。该计算数值对于评估预测蛋白质结构是否合理以及后续做蛋白质relax尤其重要
 
 ```bash
-import mindsponge as msp
-violation = msp.metrics.violation()
+from mindsponge.core.loss import get_violation_loss
+violation, _ = get_violation_loss(pdb_path)
 ```
 
 - 四元数与旋转矩阵转换
@@ -57,11 +58,6 @@ violation = msp.metrics.violation()
 ```bash
 ```
 
-- 蛋白质结构豫驰
-
-```bash
-```
-
 - Amber文件加载
 
 ```bash
@@ -69,7 +65,7 @@ violation = msp.metrics.violation()
 
 更多应用案例请见：
 
-- [分子动力学]()
+- [蛋白质结构松弛](https://gitee.com/izayoi16/mindscience/blob/dev-md/MindSPONGE/applications/molecular_dynamics/protein_relax/protein_relax_pipeline.py)
 - [蛋白质结构预测]()
 - [蛋白质结构质量评估]()
 - [MSA引擎]()
