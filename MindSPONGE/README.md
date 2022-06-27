@@ -31,6 +31,7 @@ MindSPONGE(Simulation Package Of Next GEneration molecular modelling)是基于[�
 
 ## 最新消息
 
+- 2022.06.27 [发布首个百万级开源蛋白质结构训练数据集PSP](https://arxiv.org/pdf/2206.12240v1.pdf)
 - 2022.04.21 [CAMEO竞赛月榜第一](https://www.huawei.com/cn/news/2022/4/mindspore-cameo-protein-ascend)
 
 ## 初体验
