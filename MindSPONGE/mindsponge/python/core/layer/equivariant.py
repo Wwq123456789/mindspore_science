@@ -52,20 +52,20 @@ class InvariantPointAttention(nn.Cell):
             self._type = mstype.float32
 
         self.q_scalar = nn.Dense(self.num_channel, self.num_head * self.num_scalar_qk,
-                                 weight_init=lecun_init(self.num_channel)).to_float(self._type)
+                                 weight_init=lecun_init(self.num_channel))
         self.kv_scalar = nn.Dense(self.num_channel, self.num_head * (self.num_scalar_qk + self.num_scalar_v),
-                                  weight_init=lecun_init(self.num_channel)).to_float(self._type)
+                                  weight_init=lecun_init(self.num_channel))
         self.q_point_local = nn.Dense(self.num_channel, self.num_head * 3 * self.num_point_qk,
                                       weight_init=lecun_init(self.num_channel)
-                                      ).to_float(self._type)
+                                      )
         self.kv_point_local = nn.Dense(self.num_channel, self.num_head * 3 * (self.num_point_qk + self.num_point_v),
-                                       weight_init=lecun_init(self.num_channel)).to_float(self._type)
+                                       weight_init=lecun_init(self.num_channel))
         self.soft_max = nn.Softmax()
         self.soft_plus = ops.Softplus()
         self.trainable_point_weights = Parameter(Tensor(np.ones((12,)), mstype.float32), name="trainable_point_weights")
-        self.attention_2d = nn.Dense(pair_dim, self.num_head, weight_init=lecun_init(pair_dim)).to_float(self._type)
+        self.attention_2d = nn.Dense(pair_dim, self.num_head, weight_init=lecun_init(pair_dim))
         self.output_projection = nn.Dense(self.projection_num, self.num_channel, weight_init='zeros'
-                                          ).to_float(self._type)
+                                          )
         self.scalar_weights = np.sqrt(1.0 / (3 * 16))
         self.point_weights = np.sqrt(1.0 / (3 * 18))
         self.attention_2d_weights = np.sqrt(1.0 / 3)

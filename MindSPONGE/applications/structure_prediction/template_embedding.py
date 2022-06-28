@@ -106,7 +106,7 @@ class SingleTemplateEmbedding(nn.Cell):
 
         self.num_channels = (self.config.template_pair_stack.triangle_attention_ending_node.value_dim)
         self.embedding2d = nn.Dense(88, self.num_channels,
-                                    weight_init=lecun_init(88, initializer_name='relu')).to_float(self._type)
+                                    weight_init=lecun_init(88, initializer_name='relu'))
         # if is_training:
         template_layers = nn.CellList()
         for _ in range(self.config.template_pair_stack.num_block):
@@ -124,20 +124,20 @@ class SingleTemplateEmbedding(nn.Cell):
         self.num_block = self.config.template_pair_stack.num_block
         self.batch_block = 4
 
-    def construct(self, query_embedding, mask_2d, template_aatype, template_all_atom_masks, template_all_atom_positions,
+    def construct(self, mask_2d, template_aatype, template_all_atom_masks, template_all_atom_positions,
                   template_pseudo_beta_mask, template_pseudo_beta):
         '''construct'''
         num_res = template_aatype[0, ...].shape[0]
-        template_mask_2d_temp = P.Cast()(
-            P.ExpandDims()(template_pseudo_beta_mask, -1) * P.ExpandDims()(template_pseudo_beta_mask, 1),
-            query_embedding.dtype)
+        template_mask_2d_temp = P.ExpandDims()(template_pseudo_beta_mask, -1) * \
+                                P.ExpandDims()(template_pseudo_beta_mask, 1)
 
         template_dgram_temp = dgram_from_positions(template_pseudo_beta, self.num_bins, self.min_bin, self.max_bin)
 
-        template_dgram_temp = P.Cast()(template_dgram_temp, query_embedding.dtype)
+        template_dgram_temp = P.Cast()(template_dgram_temp, self._type)
 
         to_concat_temp = (template_dgram_temp, P.ExpandDims()(template_mask_2d_temp, -1))
         aatype_temp = self.one_hot(template_aatype)
+        aatype_temp = P.Cast()(aatype_temp, self._type)
         to_concat_temp = to_concat_temp + (P.Tile()(P.ExpandDims()(aatype_temp, 1), (1, num_res, 1, 1)),
                                            P.Tile()(P.ExpandDims()(aatype_temp, 2), (1, 1, num_res, 1)))
         rot_temp, trans_temp = batch_make_transform_from_reference(template_all_atom_positions[:, :, self.n],
@@ -149,17 +149,17 @@ class SingleTemplateEmbedding(nn.Cell):
             unstack_inputs=True)
         points_tmp = P.ExpandDims()(translation_tmp, -2)
         affine_vec_tmp = batch_invert_point(points_tmp, rotation_tmp, translation_tmp, extra_dims=1)
+        affine_vec_tmp = P.Cast()(affine_vec_tmp, self._type)
         inv_distance_scalar_tmp = P.Rsqrt()(1e-6 + P.ReduceSum()(P.Square()(affine_vec_tmp), 1))
         template_mask_tmp = (template_all_atom_masks[:, :, self.n] *
                              template_all_atom_masks[:, :, self.ca] *
                              template_all_atom_masks[:, :, self.c])
         template_mask_2d_tmp = P.ExpandDims()(template_mask_tmp, -1) * P.ExpandDims()(template_mask_tmp, 1)
 
-        inv_distance_scalar_tmp = inv_distance_scalar_tmp * P.Cast()(template_mask_2d_tmp,
-                                                                     inv_distance_scalar_tmp.dtype)
+        inv_distance_scalar_tmp = inv_distance_scalar_tmp * template_mask_2d_tmp
+
         unit_vector_tmp = P.Transpose()((affine_vec_tmp * P.ExpandDims()(inv_distance_scalar_tmp, 1)), (0, 2, 3, 1))
 
-        template_mask_2d_tmp = P.Cast()(template_mask_2d_tmp, query_embedding.dtype)
         if not self.use_template_unit_vector:
             unit_vector_tmp = P.ZerosLike()(unit_vector_tmp)
         to_concat_temp = to_concat_temp + (unit_vector_tmp, P.ExpandDims()(template_mask_2d_tmp, -1),)
@@ -179,9 +179,7 @@ class SingleTemplateEmbedding(nn.Cell):
             idx_batch_loop = F.depend(idx_batch_loop + 1, output[-1])
 
         act_tmp_loop = P.Concat()(output)
-        act_tmp_loop = P.Cast()(act_tmp_loop, mstype.float32)
         act_tmp = self.output_layer_norm(act_tmp_loop)
-        act_tmp = P.Cast()(act_tmp, self._type)
         return act_tmp
 
 
@@ -208,9 +206,9 @@ class TemplateEmbedding(nn.Cell):
         if self.slice_num == 0:
             slice_num = 1
         self._flat_query_slice = Parameter(
-            Tensor(np.zeros((int(seq_len * seq_len / slice_num), 1, 128)), dtype=self._type), requires_grad=False)
+            Tensor(np.zeros((int(seq_len * seq_len / slice_num), 1, 128)), dtype=mstype.float32), requires_grad=False)
         self._flat_templates_slice = Parameter(
-            Tensor(np.zeros((int(seq_len * seq_len / slice_num), 4, 64)), dtype=self._type), requires_grad=False)
+            Tensor(np.zeros((int(seq_len * seq_len / slice_num), 4, 64)), dtype=mstype.float32), requires_grad=False)
 
     def construct(self, query_embedding, template_aatype, template_all_atom_masks, template_all_atom_positions,
                   template_mask, template_pseudo_beta_mask, template_pseudo_beta, mask_2d):
@@ -219,10 +217,8 @@ class TemplateEmbedding(nn.Cell):
         num_channels = self.num_channels
         num_res = query_embedding.shape[0]
         query_num_channels = query_embedding.shape[-1]
-        template_mask = P.Cast()(template_mask, query_embedding.dtype)
-
         mask_2d = F.depend(mask_2d, query_embedding)
-        template_pair_representation = self.template_embedder(query_embedding, mask_2d, template_aatype,
+        template_pair_representation = self.template_embedder(mask_2d, template_aatype,
                                                               template_all_atom_masks, template_all_atom_positions,
                                                               template_pseudo_beta_mask,
                                                               template_pseudo_beta)
@@ -231,14 +227,13 @@ class TemplateEmbedding(nn.Cell):
             P.Transpose()(template_pair_representation, (1, 2, 0, 3)),
             (num_res * num_res, num_templates, num_channels))
         template_mask_bias = P.ExpandDims()(P.ExpandDims()(P.ExpandDims()(template_mask, 0), 1), 2) - 1.0
-        template_mask_bias = P.Cast()(template_mask_bias, mstype.float32)
         bias = 1e4 * template_mask_bias
         if self.slice_num:
             slice_shape = (self.slice_num, -1)
             flat_query_shape = P.Shape()(flat_query)
-            flat_query = P.Reshape()(flat_query, slice_shape + flat_query_shape[1:]).astype(self._type)
+            flat_query = P.Reshape()(flat_query, slice_shape + flat_query_shape[1:])
             flat_templates_shape = P.Shape()(flat_templates)
-            flat_templates = P.Reshape()(flat_templates, slice_shape + flat_templates_shape[1:]).astype(self._type)
+            flat_templates = P.Reshape()(flat_templates, slice_shape + flat_templates_shape[1:])
             slice_idx = 0
             embedding_tuple = ()
             while slice_idx < self.slice_num:
@@ -251,18 +246,14 @@ class TemplateEmbedding(nn.Cell):
                 slice_idx += 1
             embedding = P.Concat()(embedding_tuple)
 
-            embedding = embedding.astype(mstype.float32)
             embedding = P.Reshape()(embedding, (num_res, num_res, query_num_channels))
             # No gradients if no templates.
-            template_mask = P.Cast()(template_mask, embedding.dtype)
-            embedding = embedding * P.Cast()((P.ReduceSum()(template_mask) > 0.), embedding.dtype)
+            embedding = embedding * (P.ReduceSum()(template_mask) > 0.)
             return embedding
 
         embedding = self.template_pointwise_attention(flat_query, flat_templates, bias, index=None,
                                                       nonbatched_bias=None)
-        embedding = embedding.astype(mstype.float32)
         embedding = P.Reshape()(embedding, (num_res, num_res, query_num_channels))
         # No gradients if no templates.
-        template_mask = P.Cast()(template_mask, embedding.dtype)
-        embedding = embedding * P.Cast()((P.ReduceSum()(template_mask) > 0.), embedding.dtype)
+        embedding = embedding * (P.ReduceSum()(template_mask) > 0.)
         return embedding

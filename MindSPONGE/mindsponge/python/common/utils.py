@@ -400,7 +400,7 @@ def atom37_to_torsion_angles(
 
     # 4 seq_length 4 4  batch, sequence length, chis, atoms
     seq_length = all_atom_pos.shape[1]
-    atom_indices = atom_indices.reshape((4, seq_length, 4, 4, 1)).astype("int64")
+    atom_indices = atom_indices.reshape((4, seq_length, 4, 4, 1)).astype("int32")
     new_indices = P.Concat(4)((indices0, indices1, atom_indices))  # 4, seq_length, 4, 4, 3
     chis_atom_pos = P.GatherNd()(all_atom_pos, new_indices)
     chis_mask = mnp.take(chi_angles_mask, aatype, axis=0)
@@ -464,7 +464,7 @@ def get_chi_atom_indices():
 
     chi_atom_indices.append([[0, 0, 0, 0]] * 4)  # For UNKNOWN residue.
 
-    return np.array(chi_atom_indices)
+    return np.array(chi_atom_indices).astype(np.int32)
 
 
 def to_tensor(quaternion, translation):

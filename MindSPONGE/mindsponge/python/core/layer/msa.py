@@ -54,25 +54,20 @@ class MSARowAttentionWithPairBias(nn.Cell):
             query_norm_beta = P.Gather()(self.query_norm_betas, index, 0)
             feat_2d_norm_gamma = P.Gather()(self.feat_2d_norm_gammas, index, 0)
             feat_2d_norm_beta = P.Gather()(self.feat_2d_norm_betas, index, 0)
-            feat_2d_weight = P.Cast()(P.Gather()(self.feat_2d_weights, index, 0), self._type)
+            feat_2d_weight = P.Gather()(self.feat_2d_weights, index, 0)
         else:
             query_norm_gamma = self.query_norm_gammas
             query_norm_beta = self.query_norm_betas
             feat_2d_norm_gamma = self.feat_2d_norm_gammas
             feat_2d_norm_beta = self.feat_2d_norm_betas
-            feat_2d_weight = P.Cast()(self.feat_2d_weights, self._type)
+            feat_2d_weight = self.feat_2d_weights
 
         q, k, _ = pair_act.shape
-        msa_mask = P.Cast()(msa_mask, mstype.float32)
         bias = 1e9 * (msa_mask - 1.0)
         bias = P.ExpandDims()(P.ExpandDims()(bias, 1), 2)
 
-        msa_act = P.Cast()(msa_act, mstype.float32)
-        pair_act = P.Cast()(pair_act, mstype.float32)
         msa_act, _, _ = self.norm(msa_act, query_norm_gamma, query_norm_beta)
         pair_act, _, _ = self.norm(pair_act, feat_2d_norm_gamma, feat_2d_norm_beta)
-        msa_act = P.Cast()(msa_act, self._type)
-        pair_act = P.Cast()(pair_act, self._type)
         pair_act = P.Reshape()(pair_act, (-1, pair_act.shape[-1]))
         nonbatched_bias = P.Transpose()(P.Reshape()(self.matmul(pair_act, feat_2d_weight), (q, k, self.num_head)),
                                         (2, 0, 1))
@@ -163,14 +158,9 @@ class MSAColumnAttention(nn.Cell):
         msa_act = P.Transpose()(msa_act, (1, 0, 2))
         msa_mask = P.Transpose()(msa_mask, (1, 0))
 
-        msa_mask = P.Cast()(msa_mask, mstype.float32)
         bias = 1e9 * (msa_mask - 1.)
         bias = P.ExpandDims()(P.ExpandDims()(bias, 1), 2)
-        msa_act = P.Cast()(msa_act, mstype.float32)
-        query_norm_gamma = P.Cast()(query_norm_gamma, mstype.float32)
-        query_norm_beta = P.Cast()(query_norm_beta, mstype.float32)
         msa_act, _, _ = self.query_norm(msa_act, query_norm_gamma, query_norm_beta)
-        msa_act = P.Cast()(msa_act, self._type)
 
         if self.slice_num:
             msa_act_ori_shape = P.Shape()(msa_act)
@@ -250,19 +240,12 @@ class MSAColumnGlobalAttention(nn.Cell):
             msa_act = P.Transpose()(msa_act, (1, 0, 2))
             msa_mask = P.Transpose()(msa_mask, (1, 0))
 
-        msa_mask = P.Cast()(msa_mask, mstype.float32)
         bias = 1e9 * (msa_mask - 1.)
         bias = P.ExpandDims()(P.ExpandDims()(bias, 1), 2)
-
-        msa_act = P.Cast()(msa_act, mstype.float32)
-        query_norm_gamma = P.Cast()(query_norm_gamma, mstype.float32)
-        query_norm_beta = P.Cast()(query_norm_beta, mstype.float32)
 
         msa_act, _, _ = self.query_norm(msa_act,
                                         query_norm_gamma,
                                         query_norm_beta)
-
-        msa_act = P.Cast()(msa_act, self._type)
         msa_mask = P.ExpandDims()(msa_mask, -1)
 
         if self.slice_num:

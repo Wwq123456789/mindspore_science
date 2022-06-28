@@ -51,32 +51,28 @@ class Attention(nn.Cell):
 
     def construct(self, q_data, m_data, bias, index=None, nonbatched_bias=None):
         '''construct'''
-
-        q_data = P.Cast()(q_data, self._type)
-        m_data = P.Cast()(m_data, self._type)
-
         if self.batch_size:
-            linear_q_weight = P.Cast()(P.Gather()(self.linear_q_weights, index, 0), self._type)
-            linear_k_weight = P.Cast()(P.Gather()(self.linear_k_weights, index, 0), self._type)
-            linear_v_weight = P.Cast()(P.Gather()(self.linear_v_weights, index, 0), self._type)
-            linear_output_weight = P.Cast()(P.Gather()(self.linear_output_weights, index, 0), self._type)
-            o_bias = P.Cast()(P.Gather()(self.o_biases, index, 0), self._type)
+            linear_q_weight = P.Gather()(self.linear_q_weights, index, 0)
+            linear_k_weight = P.Gather()(self.linear_k_weights, index, 0)
+            linear_v_weight = P.Gather()(self.linear_v_weights, index, 0)
+            linear_output_weight = P.Gather()(self.linear_output_weights, index, 0)
+            o_bias = P.Gather()(self.o_biases, index, 0)
             linear_gating_weight = 0
             gating_bias = 0
             if self.gating:
-                linear_gating_weight = P.Cast()(P.Gather()(self.linear_gating_weights, index, 0), self._type)
-                gating_bias = P.Cast()(P.Gather()(self.gating_biases, index, 0), self._type)
+                linear_gating_weight = P.Gather()(self.linear_gating_weights, index, 0)
+                gating_bias = P.Gather()(self.gating_biases, index, 0)
         else:
-            linear_q_weight = P.Cast()(self.linear_q_weights, self._type)
-            linear_k_weight = P.Cast()(self.linear_k_weights, self._type)
-            linear_v_weight = P.Cast()(self.linear_v_weights, self._type)
-            linear_output_weight = P.Cast()(self.linear_output_weights, self._type)
-            o_bias = P.Cast()(self.o_biases, self._type)
+            linear_q_weight = self.linear_q_weights
+            linear_k_weight = self.linear_k_weights
+            linear_v_weight = self.linear_v_weights
+            linear_output_weight = self.linear_output_weights
+            o_bias = self.o_biases
             linear_gating_weight = 0
             gating_bias = 0
             if self.gating:
-                linear_gating_weight = P.Cast()(self.linear_gating_weights, self._type)
-                gating_bias = P.Cast()(self.gating_biases, self._type)
+                linear_gating_weight = self.linear_gating_weights
+                gating_bias = self.gating_biases
 
         dim_b, dim_q, dim_a = q_data.shape
         _, dim_k, dim_c = m_data.shape
@@ -93,17 +89,14 @@ class Attention(nn.Cell):
         k = P.Reshape()(k, (dim_b, dim_k, dim_h, -1))
         v = P.Reshape()(v, (dim_b, dim_k, dim_h, -1))
 
-        tmp_q = P.Reshape()(P.Transpose()(q.astype(self._type), (0, 2, 1, 3)), (dim_b * dim_h, dim_q, -1))
-        tmp_k = P.Reshape()(P.Transpose()(k.astype(self._type), (0, 2, 1, 3)), (dim_b * dim_h, dim_k, -1))
-        bias = P.Cast()(bias, mstype.float32)
-        logits = P.Add()(P.Cast()(P.Reshape()(self.batch_matmul_trans_b(tmp_q, tmp_k), (dim_b, dim_h, dim_q, dim_k)),
-                                  mstype.float32), bias)
+        tmp_q = P.Reshape()(P.Transpose()(q, (0, 2, 1, 3)), (dim_b * dim_h, dim_q, -1))
+        tmp_k = P.Reshape()(P.Transpose()(k, (0, 2, 1, 3)), (dim_b * dim_h, dim_k, -1))
+        logits = P.Add()(P.Reshape()(self.batch_matmul_trans_b(tmp_q, tmp_k), (dim_b, dim_h, dim_q, dim_k)), bias)
 
         if nonbatched_bias is not None:
-            bias = P.Cast()(P.ExpandDims()(nonbatched_bias, 0), mstype.float32)
+            bias = P.ExpandDims()(nonbatched_bias, 0)
             logits = P.Add()(logits, bias)
         weights = self.softmax(logits)
-        weights = P.Cast()(weights, self._type)
         tmp_v = P.Reshape()(P.Transpose()(v, (0, 2, 3, 1)), (dim_b * dim_h, -1, dim_k))
         tmp_weights = P.Reshape()(weights, (dim_b * dim_h, dim_q, -1))
         weighted_avg = P.Transpose()(
@@ -113,9 +106,7 @@ class Attention(nn.Cell):
             gating_bias = P.ExpandDims()(P.ExpandDims()(gating_bias, 0), 0)
             gate_values = P.Add()(P.Reshape()(self.matmul(q_data, linear_gating_weight), (dim_b, dim_q, dim_h, -1)),
                                   gating_bias)
-            gate_values = P.Cast()(gate_values, mstype.float32)
             gate_values = self.sigmoid(gate_values)
-            gate_values = P.Cast()(gate_values, self._type)
             weighted_avg = P.Reshape()(weighted_avg * gate_values, (dim_b * dim_q, -1))
 
         weighted_avg = P.Reshape()(weighted_avg, (dim_b * dim_q, -1))
@@ -190,40 +181,33 @@ class GlobalAttention(nn.Cell):
     def construct(self, q_data, m_data, q_mask, bias, index):
         '''construct'''
         if self.batch_size:
-            q_data = P.Cast()(q_data, self._type)
-            q_weights = P.Cast()(P.Gather()(self.linear_q_weights, index, 0), self._type)
-            k_weights = P.Cast()(P.Gather()(self.linear_k_weights, index, 0), self._type)
-            v_weights = P.Cast()(P.Gather()(self.linear_v_weights, index, 0), self._type)
-            output_weights = P.Cast()(P.Gather()(self.linear_output_weights, index, 0), self._type)
-            output_bias = P.Cast()(P.Gather()(self.o_biases, index, 0), self._type)
+            q_weights = P.Gather()(self.linear_q_weights, index, 0)
+            k_weights = P.Gather()(self.linear_k_weights, index, 0)
+            v_weights = P.Gather()(self.linear_v_weights, index, 0)
+            output_weights = P.Gather()(self.linear_output_weights, index, 0)
+            output_bias = P.Gather()(self.o_biases, index, 0)
             gating_weights = 0
             gating_bias = 0
             if self.gating:
                 gating_weights = P.Gather()(self.linear_gating_weights, index, 0)
-                gating_weights = P.Cast()(gating_weights, self._type)
-                gating_bias = P.Cast()(P.Gather()(self.gating_biases, index, 0), self._type)
+                gating_bias = P.Gather()(self.gating_biases, index, 0)
         else:
-            q_mask = P.Cast()(q_mask, self._type)
-            q_data = P.Cast()(q_data, self._type)
-            q_weights = P.Cast()(self.linear_q_weights, self._type)
-            k_weights = P.Cast()(self.linear_k_weights, self._type)
-            v_weights = P.Cast()(self.linear_v_weights, self._type)
-            output_weights = P.Cast()(self.linear_output_weights, self._type)
-            output_bias = P.Cast()(self.o_biases, self._type)
+            q_weights = self.linear_q_weights
+            k_weights = self.linear_k_weights
+            v_weights = self.linear_v_weights
+            output_weights = self.linear_output_weights
+            output_bias = self.o_biases
             gating_weights = 0
             gating_bias = 0
             if self.gating:
                 gating_weights = self.linear_gating_weights
-                gating_weights = P.Cast()(gating_weights, self._type)
-                gating_bias = P.Cast()(self.gating_biases, self._type)
+                gating_bias = self.gating_biases
 
         b, _, _ = m_data.shape
 
         v_weights = P.ExpandDims()(v_weights, 0)
         v_weights = P.BroadcastTo((b, self.value_dim * self.num_head, self.value_dim))(v_weights)
         v = self.batch_matmul(m_data, v_weights)
-        q_mask = P.Cast()(q_mask, mstype.float32)
-        q_data = P.Cast()(q_data, mstype.float32)
 
         mask_shape = q_mask.shape
         value_shape = q_data.shape
@@ -234,9 +218,8 @@ class GlobalAttention(nn.Cell):
             broadcast_factor = broadcast_factor * value_size
         qa = P.ReduceSum()(q_mask * q_data, 1)
         qb = P.ReduceSum()(q_mask, 1) * broadcast_factor + 1e-10
-        q_avg = P.Cast()(P.RealDiv()(qa, qb), self._type)
+        q_avg = P.RealDiv()(qa, qb)
 
-        q_data = P.Cast()(q_data, self._type)
         q_weights = P.Reshape()(q_weights, (-1, self.num_head * self.key_dim))
         q = P.Reshape()(self.matmul(q_avg, q_weights),
                         (-1, self.num_head, self.key_dim)) * (self.key_dim ** (-0.5))
@@ -246,10 +229,9 @@ class GlobalAttention(nn.Cell):
         k = self.batch_matmul(m_data, k_weights)
 
         bias = 1e9 * (P.Transpose()(q_mask, (0, 2, 1)) - 1.0)
-        logits = P.Add()(P.Cast()(self.batch_matmul_trans_b(q, k), mstype.float32), bias)
+        logits = P.Add()(self.batch_matmul_trans_b(q, k), bias)
 
         weights = self.softmax(logits)
-        weights = P.Cast()(weights, self._type)
         weighted_avg = self.batch_matmul(weights, v)
 
         if self.gating:
@@ -259,9 +241,7 @@ class GlobalAttention(nn.Cell):
             out_shape = q_data_shape[:-1] + (-1,)
             gate_values = P.Reshape()(self.matmul_trans_b(q_data, gating_weights) + gating_bias, out_shape)
 
-            gate_values = P.Cast()(gate_values, mstype.float32)
             gate_values = P.Reshape()(self.sigmoid(gate_values), (b, -1, self.num_head, self.value_dim))
-            gate_values = P.Cast()(gate_values, self._type)
             weighted_avg = P.Reshape()(P.ExpandDims()(weighted_avg, 1) * gate_values,
                                        (-1, self.num_head * self.value_dim))
             weighted_avg_shape = P.Shape()(weighted_avg)

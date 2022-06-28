@@ -55,24 +55,21 @@ class TriangleAttention(nn.Cell):
         if self.batch_size:
             query_norm_gamma = P.Gather()(self.query_norm_gammas, index, 0)
             query_norm_beta = P.Gather()(self.query_norm_betas, index, 0)
-            feat_2d_weight = P.Cast()(P.Gather()(self.feat_2d_weights, index, 0), self._type)
+            feat_2d_weight = P.Gather()(self.feat_2d_weights, index, 0)
         else:
             query_norm_gamma = self.query_norm_gammas
             query_norm_beta = self.query_norm_betas
-            feat_2d_weight = P.Cast()(self.feat_2d_weights, self._type)
+            feat_2d_weight = self.feat_2d_weights
         if self.orientation_is_per_column:
             pair_act = P.Transpose()(pair_act, (1, 0, 2))
             pair_mask = P.Transpose()(pair_mask, (1, 0))
 
-        pair_mask = P.Cast()(pair_mask, mstype.float32)
         pair_mask = 1e9 * (pair_mask - 1.)
         bias = P.ExpandDims()(P.ExpandDims()(pair_mask, 1), 2)
 
-        pair_act = P.Cast()(pair_act, mstype.float32)
         pair_act, _, _ = self.query_norm(pair_act,
                                          query_norm_gamma,
                                          query_norm_beta)
-        pair_act = P.Cast()(pair_act, self._type)
 
         q, k, _ = pair_act.shape
         nonbatched_bias = self.matmul(P.Reshape()(pair_act, (-1, pair_act.shape[-1])), feat_2d_weight)
@@ -80,7 +77,7 @@ class TriangleAttention(nn.Cell):
         if self.slice_num:
             pair_act_ori_shape = P.Shape()(pair_act)
             slice_shape = (self.slice_num, -1) + pair_act_ori_shape[1:]
-            pair_act = P.Reshape()(pair_act, slice_shape).astype(self._type)
+            pair_act = P.Reshape()(pair_act, slice_shape)
             bias_shape = P.Shape()(bias)
             bias = P.Reshape()(bias, slice_shape[:2] + bias_shape[1:])
 
@@ -165,45 +162,42 @@ class TriangleMultiplication(nn.Cell):
         if self.batch_size:
             layer_norm_input_gamma = P.Gather()(self.layer_norm_input_gammas, index, 0)
             layer_norm_input_beta = P.Gather()(self.layer_norm_input_betas, index, 0)
-            left_projection_weight = P.Cast()(P.Gather()(self.left_projection_weights, index, 0), self._type)
-            left_projection_bias = P.Cast()(P.Gather()(self.left_projection_biases, index, 0), self._type)
-            right_projection_weight = P.Cast()(P.Gather()(self.right_projection_weights, index, 0), self._type)
-            right_projection_bias = P.Cast()(P.Gather()(self.right_projection_biases, index, 0), self._type)
-            left_gate_weight = P.Cast()(P.Gather()(self.left_gate_weights, index, 0), self._type)
-            left_gate_bias = P.Cast()(P.Gather()(self.left_gate_biases, index, 0), self._type)
-            right_gate_weight = P.Cast()(P.Gather()(self.right_gate_weights, index, 0), self._type)
-            right_gate_bias = P.Cast()(P.Gather()(self.right_gate_biases, index, 0), self._type)
-            center_layer_norm_gamma = P.Cast()(P.Gather()(self.center_layer_norm_gammas, index, 0), self._type)
-            center_layer_norm_beta = P.Cast()(P.Gather()(self.center_layer_norm_betas, index, 0), self._type)
-            output_projection_weight = P.Cast()(P.Gather()(self.output_projection_weights, index, 0), self._type)
-            output_projection_bias = P.Cast()(P.Gather()(self.output_projection_biases, index, 0), self._type)
-            gating_linear_weight = P.Cast()(P.Gather()(self.gating_linear_weights, index, 0), self._type)
-            gating_linear_bias = P.Cast()(P.Gather()(self.gating_linear_biases, index, 0), self._type)
+            left_projection_weight = P.Gather()(self.left_projection_weights, index, 0)
+            left_projection_bias = P.Gather()(self.left_projection_biases, index, 0)
+            right_projection_weight = P.Gather()(self.right_projection_weights, index, 0)
+            right_projection_bias = P.Gather()(self.right_projection_biases, index, 0)
+            left_gate_weight = P.Gather()(self.left_gate_weights, index, 0)
+            left_gate_bias = P.Gather()(self.left_gate_biases, index, 0)
+            right_gate_weight = P.Gather()(self.right_gate_weights, index, 0)
+            right_gate_bias = P.Gather()(self.right_gate_biases, index, 0)
+            center_layer_norm_gamma = P.Gather()(self.center_layer_norm_gammas, index, 0)
+            center_layer_norm_beta = P.Gather()(self.center_layer_norm_betas, index, 0)
+            output_projection_weight = P.Gather()(self.output_projection_weights, index, 0)
+            output_projection_bias = P.Gather()(self.output_projection_biases, index, 0)
+            gating_linear_weight = P.Gather()(self.gating_linear_weights, index, 0)
+            gating_linear_bias = P.Gather()(self.gating_linear_biases, index, 0)
         else:
             layer_norm_input_gamma = self.layer_norm_input_gammas
             layer_norm_input_beta = self.layer_norm_input_betas
-            left_projection_weight = P.Cast()(self.left_projection_weights, self._type)
-            left_projection_bias = P.Cast()(self.left_projection_biases, self._type)
-            right_projection_weight = P.Cast()(self.right_projection_weights, self._type)
-            right_projection_bias = P.Cast()(self.right_projection_biases, self._type)
-            left_gate_weight = P.Cast()(self.left_gate_weights, self._type)
-            left_gate_bias = P.Cast()(self.left_gate_biases, self._type)
-            right_gate_weight = P.Cast()(self.right_gate_weights, self._type)
-            right_gate_bias = P.Cast()(self.right_gate_biases, self._type)
-            center_layer_norm_gamma = P.Cast()(self.center_layer_norm_gammas, self._type)
-            center_layer_norm_beta = P.Cast()(self.center_layer_norm_betas, self._type)
-            output_projection_weight = P.Cast()(self.output_projection_weights, self._type)
-            output_projection_bias = P.Cast()(self.output_projection_biases, self._type)
-            gating_linear_weight = P.Cast()(self.gating_linear_weights, self._type)
-            gating_linear_bias = P.Cast()(self.gating_linear_biases, self._type)
+            left_projection_weight = self.left_projection_weights
+            left_projection_bias = self.left_projection_biases
+            right_projection_weight = self.right_projection_weights
+            right_projection_bias = self.right_projection_biases
+            left_gate_weight = self.left_gate_weights
+            left_gate_bias = self.left_gate_biases
+            right_gate_weight = self.right_gate_weights
+            right_gate_bias = self.right_gate_biases
+            center_layer_norm_gamma = self.center_layer_norm_gammas
+            center_layer_norm_beta = self.center_layer_norm_betas
+            output_projection_weight = self.output_projection_weights
+            output_projection_bias = self.output_projection_biases
+            gating_linear_weight = self.gating_linear_weights
+            gating_linear_bias = self.gating_linear_biases
 
-        mask = P.Cast()(mask, self._type)
         mask = P.ExpandDims()(mask, -1)
-        act = P.Cast()(act, mstype.float32)
         act, _, _ = self.layer_norm(act,
                                     layer_norm_input_gamma,
                                     layer_norm_input_beta)
-        act = P.Cast()(act, self._type)
 
         input_act = act
         act_shape = P.Shape()(act)
@@ -215,9 +209,7 @@ class TriangleMultiplication(nn.Cell):
         act = F.depend(act, left_projection)
 
         left_gate_values = P.Reshape()(P.BiasAdd()(self.matmul(act, left_gate_weight), left_gate_bias), out_shape)
-        left_gate_values = P.Cast()(left_gate_values, mstype.float32)
         left_gate_values = self.sigmoid(left_gate_values)
-        left_gate_values = P.Cast()(left_gate_values, self._type)
 
         left_proj_act = left_projection * left_gate_values
         act = F.depend(act, left_proj_act)
@@ -227,9 +219,7 @@ class TriangleMultiplication(nn.Cell):
         act = F.depend(act, right_projection)
 
         right_gate_values = P.Reshape()(P.BiasAdd()(self.matmul(act, right_gate_weight), right_gate_bias), out_shape)
-        right_gate_values = P.Cast()(right_gate_values, mstype.float32)
         right_gate_values = self.sigmoid(right_gate_values)
-        right_gate_values = P.Cast()(right_gate_values, self._type)
 
         right_proj_act = right_projection * right_gate_values
         left_proj_act = F.depend(left_proj_act, right_proj_act)
@@ -246,13 +236,9 @@ class TriangleMultiplication(nn.Cell):
                 act = self.batch_matmul_trans_b(left_proj_act_tmp, right_proj_act_tmp)
                 act = P.Transpose()(act, (2, 1, 0))
 
-        act = P.Cast()(act, mstype.float32)
-        center_layer_norm_gamma = P.Cast()(center_layer_norm_gamma, mstype.float32)
-        center_layer_norm_beta = P.Cast()(center_layer_norm_beta, mstype.float32)
         act, _, _ = self.layer_norm(act,
                                     center_layer_norm_gamma,
                                     center_layer_norm_beta)
-        act = P.Cast()(act, self._type)
         act_shape = P.Shape()(act)
 
         if len(act_shape) != 2:
@@ -265,9 +251,7 @@ class TriangleMultiplication(nn.Cell):
         out_shape = input_act_shape[:-1] + (-1,)
         gate_values = P.Reshape()(P.BiasAdd()(self.matmul(input_act, gating_linear_weight), gating_linear_bias),
                                   out_shape)
-        gate_values = P.Cast()(gate_values, mstype.float32)
         gate_values = self.sigmoid(gate_values)
-        gate_values = P.Cast()(gate_values, self._type)
 
         act = act * gate_values
         return act
@@ -367,28 +351,23 @@ class OuterProductMean(nn.Cell):
         if self.batch_size:
             layer_norm_input_gamma = P.Gather()(self.layer_norm_input_gammas, index, 0)
             layer_norm_input_beta = P.Gather()(self.layer_norm_input_betas, index, 0)
-            left_projection_weight = P.Cast()(P.Gather()(self.left_projection_weights, index, 0), self._type)
-            left_projection_bias = P.Cast()(P.Gather()(self.left_projection_biases, index, 0), self._type)
-            right_projection_weight = P.Cast()(P.Gather()(self.right_projection_weights, index, 0), self._type)
-            right_projection_bias = P.Cast()(P.Gather()(self.right_projection_biases, index, 0), self._type)
-            linear_output_weight = P.Cast()(P.Gather()(self.linear_output_weights, index, 0), self._type)
-            linear_output_bias = P.Cast()(P.Gather()(self.o_biases, index, 0), self._type)
+            left_projection_weight = P.Gather()(self.left_projection_weights, index, 0)
+            left_projection_bias = P.Gather()(self.left_projection_biases, index, 0)
+            right_projection_weight = P.Gather()(self.right_projection_weights, index, 0)
+            right_projection_bias = P.Gather()(self.right_projection_biases, index, 0)
+            linear_output_weight = P.Gather()(self.linear_output_weights, index, 0)
+            linear_output_bias = P.Gather()(self.o_biases, index, 0)
         else:
             layer_norm_input_gamma = self.layer_norm_input_gammas
             layer_norm_input_beta = self.layer_norm_input_betas
-            left_projection_weight = P.Cast()(self.left_projection_weights, self._type)
-            left_projection_bias = P.Cast()(self.left_projection_biases, self._type)
-            right_projection_weight = P.Cast()(self.right_projection_weights, self._type)
-            right_projection_bias = P.Cast()(self.right_projection_biases, self._type)
-            linear_output_weight = P.Cast()(self.linear_output_weights, self._type)
-            linear_output_bias = P.Cast()(self.o_biases, self._type)
-        mask = P.Cast()(mask, self._type)
+            left_projection_weight = self.left_projection_weights
+            left_projection_bias = self.left_projection_biases
+            right_projection_weight = self.right_projection_weights
+            right_projection_bias = self.right_projection_biases
+            linear_output_weight = self.linear_output_weights
+            linear_output_bias = self.o_biases
         mask = P.ExpandDims()(mask, -1)
-        act = P.Cast()(act, mstype.float32)
-        layer_norm_input_gamma = P.Cast()(layer_norm_input_gamma, mstype.float32)
-        layer_norm_input_beta = P.Cast()(layer_norm_input_beta, mstype.float32)
         act, _, _ = self.layer_norm_input(act, layer_norm_input_gamma, layer_norm_input_beta)
-        act = P.Cast()(act, self._type)
         act_shape = P.Shape()(act)
         if len(act_shape) != 2:
             act = P.Reshape()(act, (-1, act_shape[-1]))
@@ -444,7 +423,7 @@ class OuterProductMean(nn.Cell):
             act = P.Reshape()(act, (-1, act_shape[-2], act_shape[-1]))
             epsilon = 1e-3
             tmp_mask = P.Transpose()(mask, (2, 1, 0))
-            norm = P.Transpose()(self.batch_matmul_trans_b(tmp_mask, tmp_mask), (1, 2, 0)).astype(mstype.float32)
+            norm = P.Transpose()(self.batch_matmul_trans_b(tmp_mask, tmp_mask), (1, 2, 0))
             act = P.RealDiv()(act, epsilon + norm)
             return act
 
