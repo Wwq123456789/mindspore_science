@@ -17,8 +17,11 @@ import numpy as np
 import mindspore.nn as nn
 import mindspore.common.dtype as mstype
 import mindspore.numpy as mnp
+import mindspore.ops as ops
 from mindspore import Parameter
 from mindspore.common.tensor import Tensor
+from ...common.utils import apply_to_point, _invert_point
+from .initializer import lecun_init
 
 
 class InvariantPointAttention(nn.Cell):
@@ -164,10 +167,8 @@ class InvariantPointAttention(nn.Cell):
         mask_2d = mask * mnp.swapaxes(mask, -1, -2)
         attn_logits -= 50 * (1. - mask_2d)
 
-        # [num_head, num_query_residues, num_target_residues]
         attn = self.soft_max(attn_logits)
 
-        # [num_head, num_query_residues, num_head * num_scalar_v]
         result_scalar = ops.matmul(attn, v)
 
         result_point_global = [mnp.swapaxes(mnp.sum(attn[:, :, :, None] * v_point[0][:, None, :, :], axis=-2), -2, -3),

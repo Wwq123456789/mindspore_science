@@ -14,11 +14,13 @@
 # ============================================================================
 """MSA"""
 import numpy as np
+import mindspore.numpy as mnp
 import mindspore.nn as nn
 import mindspore.common.dtype as mstype
 from mindspore import Parameter
 from mindspore.common.tensor import Tensor
 from mindspore.ops import operations as P
+from mindspore.ops import functional as F
 from .basic import Attention, GlobalAttention
 
 

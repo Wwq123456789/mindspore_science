@@ -14,11 +14,14 @@
 # ============================================================================
 """Transition"""
 import numpy as np
-import mindspore.nn as nn
 import mindspore.common.dtype as mstype
-from mindspore import Parameter
+import mindspore.nn as nn
 from mindspore.common.tensor import Tensor
+from mindspore import Parameter
+from mindspore.ops import functional as F
 from mindspore.ops import operations as P
+from mindspore.common.initializer import initializer
+from .initializer import lecun_init
 
 
 class Transition(nn.Cell):

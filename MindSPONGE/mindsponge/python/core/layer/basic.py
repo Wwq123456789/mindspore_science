@@ -19,6 +19,7 @@ import mindspore.common.dtype as mstype
 from mindspore import Parameter
 from mindspore.common.tensor import Tensor
 from mindspore.ops import operations as P
+from .initializer import glorot_uniform
 
 
 class Attention(nn.Cell):
@@ -47,7 +48,6 @@ class Attention(nn.Cell):
         else:
             self._type = mstype.float32
         self._init_parameter()
-
 
     def construct(self, q_data, m_data, bias, index=None, nonbatched_bias=None):
         '''construct'''
@@ -158,6 +158,7 @@ class Attention(nn.Cell):
                     Tensor(np.zeros([self.num_head * self.value_dim, self.q_data_dim]), mstype.float32))
                 self.gating_biases = Parameter(Tensor(np.ones((self.num_head, self.value_dim)), mstype.float32),
                                                name="gating_b")
+
 
 class GlobalAttention(nn.Cell):
     '''global attention'''

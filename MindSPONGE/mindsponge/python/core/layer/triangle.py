@@ -19,7 +19,11 @@ import mindspore.common.dtype as mstype
 from mindspore import Parameter
 from mindspore.common.tensor import Tensor
 from mindspore.ops import operations as P
+from mindspore.ops import functional as F
+from mindspore.common.initializer import initializer
+import mindspore.numpy as mnp
 from .basic import Attention
+from .initializer import lecun_init
 
 
 class TriangleAttention(nn.Cell):
@@ -41,7 +45,7 @@ class TriangleAttention(nn.Cell):
         self.layer_norm_dim = layer_norm_dim
         self.idx = Tensor(0, mstype.int32)
         if mixed_precision:
-            self._type = self._type
+            self._type = mstype.float16
         else:
             self._type = mstype.float32
         self._init_parameter()
@@ -139,7 +143,8 @@ class TriangleMultiplication(nn.Cell):
         self.matmul = P.MatMul(transpose_b=True)
         self.sigmoid = nn.Sigmoid()
         self.batch_matmul_trans_b = P.BatchMatMul(transpose_b=True)
-        if self.equation not in ["ikc,jkc->ijc", "kjc,kic->ijc"]:
+        equation = ["ikc,jkc->ijc", "kjc,kic->ijc"]
+        if self.equation not in equation:
             print("TriangleMultiplication Not Suppl")
         if self.equation == "ikc,jkc->ijc":
             self.equation = True
@@ -150,7 +155,7 @@ class TriangleMultiplication(nn.Cell):
         self.batch_size = batch_size
         self.layer_norm_dim = layer_norm_dim
         if mixed_precision:
-            self._type = self._type
+            self._type = mstype.float16
         else:
             self._type = mstype.float32
         self._init_parameter()
@@ -377,7 +382,6 @@ class OuterProductMean(nn.Cell):
             right_projection_bias = P.Cast()(self.right_projection_biases, self._type)
             linear_output_weight = P.Cast()(self.linear_output_weights, self._type)
             linear_output_bias = P.Cast()(self.o_biases, self._type)
-
         mask = P.Cast()(mask, self._type)
         mask = P.ExpandDims()(mask, -1)
         act = P.Cast()(act, mstype.float32)

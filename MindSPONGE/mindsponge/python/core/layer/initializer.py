@@ -12,9 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""init"""
-from .basic import Attention, GlobalAttention
-from .msa import MSARowAttentionWithPairBias, MSAColumnAttention, MSAColumnGlobalAttention
-from .triangle import TriangleAttention, TriangleMultiplication, OuterProductMean
-from .equivariant import InvariantPointAttention
-from .transition import Transition
+"""initializer"""
+
+import numpy as np
+from mindspore.common.initializer import TruncatedNormal
+
+TRUNCATED_NORMAL_STDDEV_FACTOR = np.asarray(.87962566103423978, dtype=np.float32)
+
+
+def lecun_init(fan_in, initializer_name='linear'):
+    """lecun init"""
+    scale = 1.0
+    if initializer_name == 'relu':
+        scale *= 2
+    weight_init = TruncatedNormal(sigma=np.sqrt(scale / fan_in) / TRUNCATED_NORMAL_STDDEV_FACTOR)
+    return weight_init
+
+
+def glorot_uniform(fan_in, fan_out, weight_shape):
+    """glorot uniform"""
+    limit = np.sqrt(6 / (fan_in + fan_out))
+    return np.random.uniform(-limit, limit, size=weight_shape)

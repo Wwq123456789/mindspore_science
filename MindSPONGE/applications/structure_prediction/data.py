@@ -13,13 +13,15 @@
 # limitations under the License.
 # ============================================================================
 """data process"""
+import numpy as np
+from mindspore import Tensor
+
 from mindsponge.data.data_transform import one_hot, correct_msa_restypes, randomly_replace_msa_with_unknown, \
     fix_templates_aatype, pseudo_beta_fn, make_atom14_masks, \
     block_delete_msa_indices, sample_msa, make_masked_msa, \
     nearest_neighbor_clusters, summarize_clusters, crop_extra_msa, \
     make_msa_feat, random_crop_to_size
 from mindsponge.common.residue_constants import atom_type_num
-import numpy as np
 
 NUM_RES = 'num residues placeholder'
 NUM_MSA_SEQ = 'msa placeholder'
@@ -200,6 +202,7 @@ def np_to_array_dict(np_example, features):
 
 class Feature:
     """feature process"""
+
     def __init__(self, cfg, raw_feature=None):
         if raw_feature and isinstance(raw_feature, dict):
             self.ensemble_num = 0
@@ -219,11 +222,11 @@ class Feature:
         setattr(self, "is_distillation", np.array(float(distillation), dtype=np.float32))
         # convert int64 to int32
         for k, v in vars(self).items():
-            if v.dtype == np.int64:
-                setattr(self, k, v.astype(np.int32))
-
+            if k != "ensemble_num":
+                if v.dtype == np.int64:
+                    setattr(self, k, v.astype(np.int32))
         aatype = np.argmax(self.aatype, axis=-1)
-        setattr(self, "aatype", aatype)
+        setattr(self, "aatype", aatype.astype(np.int32))
         data = vars(self)
         for k in ['msa', 'num_alignments', 'seq_length', 'sequence', 'superfamily', 'deletion_matrix',
                   'resolution', 'between_segment_residues', 'residue_index', 'template_all_atom_masks']:
@@ -253,10 +256,10 @@ class Feature:
 
         if use_templates:
             template_aatype = fix_templates_aatype(self.template_aatype)
+            setattr(self, "template_aatype", template_aatype)
             template_pseudo_beta, template_pseudo_beta_mask = pseudo_beta_fn(self.template_aatype,
                                                                              self.template_all_atom_positions,
                                                                              self.template_all_atom_masks)
-            setattr(self, "template_aatype", template_aatype)
             setattr(self, "template_pseudo_beta", template_pseudo_beta)
             setattr(self, "template_pseudo_beta_mask", template_pseudo_beta_mask)
 
@@ -391,15 +394,13 @@ class Feature:
                     data[k] = v[:max_templates]
         return data
 
-    def pipeline(self, cfg):
+    def pipeline(self, cfg, mixed_precision=True):
         """feature process pipeline"""
         self.non_ensemble(cfg.common.distillation, cfg.common.replace_proportion, cfg.common.use_templates)
         non_ensemble_data = vars(self).copy()
-
+        max_msa_clusters = cfg.eval.max_msa_clusters
         if cfg.common.reduce_msa_clusters_by_max_templates:
             max_msa_clusters = cfg.eval.max_msa_clusters - cfg.eval.max_templates
-        else:
-            max_msa_clusters = cfg.eval.max_msa_clusters
 
         masked_msa = hasattr(cfg, "masked_msa")
         protein = self.ensemble(non_ensemble_data,
@@ -461,7 +462,14 @@ class Feature:
                       'template_pseudo_beta_mask', 'template_pseudo_beta',
                       'extra_msa', 'extra_has_deletion', 'extra_deletion_value', 'extra_msa_mask',
                       'residx_atom37_to_atom14', 'atom37_atom_exists', 'residue_index']
+        dtype = np.float32
+        if mixed_precision:
+            dtype = np.float16
         arrays = [features[key] for key in input_keys]
-        arrays = [array.astype(np.float16) if array.dtype == "float64" else array for array in arrays]
-        arrays = [array.astype(np.float16) if array.dtype == "float32" else array for array in arrays]
-        return arrays
+        arrays = [array.astype(dtype) if array.dtype == "float64" else array for array in arrays]
+        arrays = [array.astype(dtype) if array.dtype == "float32" else array for array in arrays]
+        prev_pos = Tensor(np.zeros([cfg.eval.crop_size, 37, 3]).astype(dtype))
+        prev_msa_first_row = Tensor(np.zeros([cfg.eval.crop_size, 256]).astype(dtype))
+        prev_pair = Tensor(np.zeros([cfg.eval.crop_size, cfg.eval.crop_size, 128]).astype(dtype))
+        res = [arrays, prev_pos, prev_msa_first_row, prev_pair]
+        return res
