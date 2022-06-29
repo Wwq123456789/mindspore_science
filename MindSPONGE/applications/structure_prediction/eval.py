@@ -58,10 +58,10 @@ if __name__ == "__main__":
     structure_prediction = MFold(model_cfg, mixed_precision=args.mixed_precision)
     opt = nn.Adam(params=structure_prediction.trainable_params(), learning_rate=1e-4, eps=1e-6)
     if args.mixed_precision:
-        amp_level = '03'
+        AMP_LEVEL = 'O3'
     else:
-        amp_level = '00'
-    mfold = Model(structure_prediction, optimizer=opt, amp_level=amp_level)
+        AMP_LEVEL = 'O0'
+    mfold = Model(structure_prediction, optimizer=opt, amp_level=AMP_LEVEL)
     for i in range(1):
         feat_i = [Tensor(x[i]) for x in feat]
         result = mfold.predict(*feat_i, prev_pos, prev_msa_first_row, prev_pair)
