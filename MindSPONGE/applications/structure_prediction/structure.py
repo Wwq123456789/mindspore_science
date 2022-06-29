@@ -39,24 +39,19 @@ class MultiRigidSidechain(nn.Cell):
         else:
             self._type = mstype.float32
         self.input_projection = nn.Dense(single_repr_dim, self.config.num_channel,
-                                         weight_init=lecun_init(single_repr_dim)
-                                         ).to_float(self._type)
+                                         weight_init=lecun_init(single_repr_dim))
         self.input_projection_1 = nn.Dense(single_repr_dim, self.config.num_channel,
-                                           weight_init=lecun_init(single_repr_dim)
-                                           ).to_float(self._type)
+                                           weight_init=lecun_init(single_repr_dim))
         self.relu = nn.ReLU()
         self.resblock1 = nn.Dense(self.config.num_channel, self.config.num_channel,
                                   weight_init=lecun_init(self.config.num_channel,
-                                                         initializer_name='relu')).to_float(self._type)
-        self.resblock2 = nn.Dense(self.config.num_channel, self.config.num_channel, weight_init='zeros').to_float(
-            self._type)  # todo check
+                                                         initializer_name='relu'))
+        self.resblock2 = nn.Dense(self.config.num_channel, self.config.num_channel, weight_init='zeros')
         self.resblock1_1 = nn.Dense(self.config.num_channel, self.config.num_channel,
-                                    weight_init=lecun_init(self.config.num_channel, initializer_name='relu')
-                                    ).to_float(self._type)
-        self.resblock2_1 = nn.Dense(self.config.num_channel, self.config.num_channel, weight_init='zeros'  # todo check
-                                    ).to_float(self._type)
+                                    weight_init=lecun_init(self.config.num_channel, initializer_name='relu'))
+        self.resblock2_1 = nn.Dense(self.config.num_channel, self.config.num_channel, weight_init='zeros')
         self.unnormalized_angles = nn.Dense(self.config.num_channel, 14,
-                                            weight_init=lecun_init(self.config.num_channel)).to_float(self._type)
+                                            weight_init=lecun_init(self.config.num_channel))
         self.restype_atom14_to_rigid_group = Tensor(residue_constants.restype_atom14_to_rigid_group)
         self.restype_atom14_rigid_group_positions = Tensor(residue_constants.restype_atom14_rigid_group_positions)
         self.restype_atom14_mask = Tensor(residue_constants.restype_atom14_mask)
@@ -77,26 +72,26 @@ class MultiRigidSidechain(nn.Cell):
           angles, positions and new frames
         """
 
-        act1 = self.input_projection(self.relu(act.astype(mstype.float32)))
-        init_act1 = self.input_projection_1(self.relu(initial_act.astype(mstype.float32)))
+        act1 = self.input_projection(self.relu(act))
+        init_act1 = self.input_projection_1(self.relu(initial_act))
         # Sum the activation list (equivalent to concat then Linear).
         act = act1 + init_act1
 
         # Mapping with some residual blocks.
         # resblock1
         old_act = act
-        act = self.resblock1(self.relu(act.astype(mstype.float32)))
-        act = self.resblock2(self.relu(act.astype(mstype.float32)))
+        act = self.resblock1(self.relu(act))
+        act = self.resblock2(self.relu(act))
         act += old_act
         # resblock2
         old_act = act
-        act = self.resblock1_1(self.relu(act.astype(mstype.float32)))
-        act = self.resblock2_1(self.relu(act.astype(mstype.float32)))
+        act = self.resblock1_1(self.relu(act))
+        act = self.resblock2_1(self.relu(act))
         act += old_act
 
         # Map activations to torsion angles. Shape: (num_res, 14).
         num_res = act.shape[0]
-        unnormalized_angles = self.unnormalized_angles(self.relu(act.astype(mstype.float32)))
+        unnormalized_angles = self.unnormalized_angles(self.relu(act))
 
         unnormalized_angles = mnp.reshape(unnormalized_angles, [num_res, 7, 2])
 
@@ -136,15 +131,12 @@ class FoldIteration(nn.Cell):
         self.attention_layer_norm = nn.LayerNorm([self.config.num_channel,], epsilon=1e-5)
         self.transition_layer_norm = nn.LayerNorm([self.config.num_channel,], epsilon=1e-5)
         self.transition = nn.Dense(self.config.num_channel, config.num_channel,
-                                   weight_init=lecun_init(self.config.num_channel, initializer_name='relu')
-                                   ).to_float(self._type)
+                                   weight_init=lecun_init(self.config.num_channel, initializer_name='relu'))
         self.transition_1 = nn.Dense(self.config.num_channel, self.config.num_channel,
-                                     weight_init=lecun_init(self.config.num_channel, initializer_name='relu')
-                                     ).to_float(self._type)
-        self.transition_2 = nn.Dense(self.config.num_channel, self.config.num_channel, weight_init='zeros'
-                                     ).to_float(self._type)
+                                     weight_init=lecun_init(self.config.num_channel, initializer_name='relu'))
+        self.transition_2 = nn.Dense(self.config.num_channel, self.config.num_channel, weight_init='zeros')
         self.relu = nn.ReLU()
-        self.affine_update = nn.Dense(self.config.num_channel, 6, weight_init='zeros').to_float(self._type)
+        self.affine_update = nn.Dense(self.config.num_channel, 6, weight_init='zeros')
         self.attention_module = InvariantPointAttention(self.config.num_head,
                                                         self.config.num_scalar_qk,
                                                         self.config.num_scalar_v,
@@ -161,18 +153,18 @@ class FoldIteration(nn.Cell):
         attn = self.attention_module(act, static_feat_2d, sequence_mask, rotation, translation)
         act += attn
         act = self.drop_out(act)
-        act = self.attention_layer_norm(act.astype(mstype.float32))
+        act = self.attention_layer_norm(act)
         # Transition
         input_act = act
         act = self.transition(act)
-        act = self.relu(act.astype(mstype.float32))
+        act = self.relu(act)
         act = self.transition_1(act)
-        act = self.relu(act.astype(mstype.float32))
+        act = self.relu(act)
         act = self.transition_2(act)
 
         act += input_act
         act = self.drop_out(act)
-        act = self.transition_layer_norm(act.astype(mstype.float32))
+        act = self.transition_layer_norm(act)
 
         # This block corresponds to
         # Jumper et al. (2021) Alg. 23 "Backbone update"
@@ -208,7 +200,7 @@ class StructureModule(nn.Cell):
         self.fold_iteration = FoldIteration(self.config, pair_dim, single_repr_dim, mixed_precision)
         self.single_layer_norm = nn.LayerNorm([single_repr_dim,], epsilon=1e-5)
         self.initial_projection = nn.Dense(single_repr_dim, self.config.num_channel,
-                                           weight_init=lecun_init(single_repr_dim)).to_float(self._type)
+                                           weight_init=lecun_init(single_repr_dim))
         self.pair_layer_norm = nn.LayerNorm([pair_dim,], epsilon=1e-5)
         self.num_layer = self.config.num_layer
         self.indice0 = Tensor(
@@ -218,12 +210,12 @@ class StructureModule(nn.Cell):
     def construct(self, single, pair, seq_mask, aatype, residx_atom37_to_atom14=None, atom37_atom_exists=None):
         """construct"""
         sequence_mask = seq_mask[:, None]
-        act = self.single_layer_norm(single.astype(mstype.float32))
+        act = self.single_layer_norm(single)
         initial_act = act
         act = self.initial_projection(act)
         quaternion, rotation, translation = generate_new_affine(sequence_mask)
         aff_to_tensor = to_tensor(quaternion, mnp.transpose(translation))
-        act_2d = self.pair_layer_norm(pair.astype(mstype.float32))
+        act_2d = self.pair_layer_norm(pair)
         # folder iteration
         quaternion, rotation, translation = from_tensor(aff_to_tensor)
         # todo 8 iteration

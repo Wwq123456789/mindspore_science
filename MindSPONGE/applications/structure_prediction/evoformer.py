@@ -16,7 +16,6 @@
 
 import mindspore.common.dtype as mstype
 import mindspore.nn as nn
-from mindspore.ops import operations as P
 from mindsponge.core.layer import MSARowAttentionWithPairBias, Transition, OuterProductMean, \
     TriangleAttention, TriangleMultiplication, \
     MSAColumnGlobalAttention, MSAColumnAttention
@@ -119,8 +118,6 @@ class Evoformer(nn.Cell):
 
     def construct(self, msa_act, pair_act, msa_mask, extra_msa_norm, pair_mask, index=None):
         '''construct'''
-        pair_act = P.Cast()(pair_act, self._type)
-        msa_act = P.Cast()(msa_act, self._type)
         msa_act = msa_act + self.msa_row_attention_with_pair_bias(msa_act, msa_mask, pair_act, index)
         msa_act = msa_act + self.attn_mod(msa_act, msa_mask, index)
         msa_act = msa_act + self.msa_transition(msa_act, index)

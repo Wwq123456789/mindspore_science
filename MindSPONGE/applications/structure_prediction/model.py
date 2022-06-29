@@ -37,12 +37,12 @@ def caculate_constant_array(seq_length):
     mirror_psi_mask = np.float32(np.asarray([1., 1., -1., 1., 1., 1., 1.])[None, None, :, None])
     chi_pi_periodic = np.float32(np.array(residue_constants.chi_pi_periodic))
 
-    indices0 = np.arange(4).reshape((-1, 1, 1, 1, 1)).astype("int64")  # 4 batch
+    indices0 = np.arange(4).reshape((-1, 1, 1, 1, 1)).astype("int32")  # 4 batch
     indices0 = indices0.repeat(seq_length, axis=1)  # seq_length sequence length
     indices0 = indices0.repeat(4, axis=2)  # 4 chis
     indices0 = indices0.repeat(4, axis=3)  # 4 atoms
 
-    indices1 = np.arange(seq_length).reshape((1, -1, 1, 1, 1)).astype("int64")
+    indices1 = np.arange(seq_length).reshape((1, -1, 1, 1, 1)).astype("int32")
     indices1 = indices1.repeat(4, axis=0)
     indices1 = indices1.repeat(4, axis=2)
     indices1 = indices1.repeat(4, axis=3)
@@ -79,37 +79,36 @@ class MFold(nn.Cell):
         self.indices0, self.indices1 = caculate_constant_array(self.cfg.seq_length)
 
         self.preprocess_1d = nn.Dense(self.cfg.common.target_feat_dim, self.cfg.msa_channel,
-                                      weight_init=lecun_init(self.cfg.common.target_feat_dim)).to_float(self._type)
+                                      weight_init=lecun_init(self.cfg.common.target_feat_dim))
         self.preprocess_msa = nn.Dense(self.cfg.common.msa_feat_dim, self.cfg.msa_channel,
-                                       weight_init=lecun_init(self.cfg.common.msa_feat_dim)).to_float(self._type)
+                                       weight_init=lecun_init(self.cfg.common.msa_feat_dim))
         self.left_single = nn.Dense(self.cfg.common.target_feat_dim, self.cfg.pair_channel,
-                                    weight_init=lecun_init(self.cfg.common.target_feat_dim)).to_float(self._type)
+                                    weight_init=lecun_init(self.cfg.common.target_feat_dim))
         self.right_single = nn.Dense(self.cfg.common.target_feat_dim, self.cfg.pair_channel,
-                                     weight_init=lecun_init(self.cfg.common.target_feat_dim)).to_float(self._type)
+                                     weight_init=lecun_init(self.cfg.common.target_feat_dim))
         self.prev_pos_linear = nn.Dense(self.cfg.common.dgram_dim, self.cfg.pair_channel,
-                                        weight_init=lecun_init(self.cfg.common.dgram_dim)).to_float(self._type)
+                                        weight_init=lecun_init(self.cfg.common.dgram_dim))
         self.pair_activations = nn.Dense(self.cfg.common.pair_in_dim, self.cfg.pair_channel,
-                                         weight_init=lecun_init(self.cfg.common.pair_in_dim)).to_float(self._type)
+                                         weight_init=lecun_init(self.cfg.common.pair_in_dim))
         self.extra_msa_one_hot = nn.OneHot(depth=23, axis=-1)
         self.template_aatype_one_hot = nn.OneHot(depth=22, axis=-1)
         self.prev_msa_first_row_norm = nn.LayerNorm([256,], epsilon=1e-5)
         self.prev_pair_norm = nn.LayerNorm([128,], epsilon=1e-5)
         self.one_hot = nn.OneHot(depth=self.cfg.max_relative_feature * 2 + 1, axis=-1)
-        self.extra_msa_activations = nn.Dense(25, self.cfg.extra_msa_channel, weight_init=lecun_init(25)).to_float(
-            self._type)
+        self.extra_msa_activations = nn.Dense(25, self.cfg.extra_msa_channel, weight_init=lecun_init(25))
         self.template_embedding = TemplateEmbedding(self.cfg.template, self.cfg.seq_length, mixed_precision)
 
         self.matmul_trans_b = P.MatMul(transpose_b=True)
         self.batch_matmul_trans_b = P.BatchMatMul(transpose_b=True)
         self.template_single_embedding = nn.Dense(57, self.cfg.msa_channel,
                                                   weight_init=
-                                                  lecun_init(57, initializer_name='relu')).to_float(self._type)
+                                                  lecun_init(57, initializer_name='relu'))
         self.template_projection = nn.Dense(self.cfg.msa_channel, self.cfg.msa_channel,
                                             weight_init=lecun_init(self.cfg.msa_channel,
-                                                                   initializer_name='relu')).to_float(self._type)
+                                                                   initializer_name='relu'))
         self.relu = nn.ReLU()
         self.single_activations = nn.Dense(self.cfg.msa_channel, self.cfg.seq_channel,
-                                           weight_init=lecun_init(self.cfg.msa_channel)).to_float(self._type)
+                                           weight_init=lecun_init(self.cfg.msa_channel))
         extra_msa_stack = nn.CellList()
         for _ in range(self.extra_msa_stack_num):
             extra_msa_block = Evoformer(self.cfg,
@@ -138,8 +137,8 @@ class MFold(nn.Cell):
                                        is_extra_msa=False,
                                        batch_size=self.msa_stack_num,
                                        mixed_precision=mixed_precision)
-            self.idx_evoformer_block = Parameter(Tensor(0, mstype.int32), requires_grad=False)
-            self.evoformer_num_block_eval = Tensor(self.msa_stack_num, mstype.int32)
+        self.idx_evoformer_block = Parameter(Tensor(0, mstype.int32), requires_grad=False)
+        self.evoformer_num_block_eval = Tensor(self.msa_stack_num, mstype.int32)
 
         self.structure_module = StructureModule(self.cfg,
                                                 self.cfg.seq_channel,
@@ -160,7 +159,6 @@ class MFold(nn.Cell):
         left_single = self.left_single(target_feat)
         right_single = self.right_single(target_feat)
         pair_activations = P.ExpandDims()(left_single, 1) + P.ExpandDims()(right_single, 0)
-        seq_mask = P.Cast()(seq_mask, mstype.float32)
         mask_2d = P.ExpandDims()(seq_mask, 1) * P.ExpandDims()(seq_mask, 0)
         if self.recycle_pos:
             prev_pseudo_beta = pseudo_beta_fn(aatype, prev_pos, None)
@@ -168,11 +166,10 @@ class MFold(nn.Cell):
             pair_activations += self.prev_pos_linear(dgram)
 
         if self.recycle_features:
-            prev_msa_first_row = self.prev_msa_first_row_norm(prev_msa_first_row.astype(mstype.float32)).astype(
-                self._type)
+            prev_msa_first_row = self.prev_msa_first_row_norm(prev_msa_first_row)
             msa_activations = mnp.concatenate(
                 (mnp.expand_dims(prev_msa_first_row + msa_activations[0, ...], 0), msa_activations[1:, ...]), 0)
-            pair_activations += self.prev_pair_norm(prev_pair.astype(mstype.float32))
+            pair_activations += self.prev_pair_norm(prev_pair)
 
         if self.max_relative_feature:
             offset = P.ExpandDims()(residue_index, 1) - P.ExpandDims()(residue_index, 0)
@@ -190,8 +187,7 @@ class MFold(nn.Cell):
         extra_msa_feat = mnp.concatenate((msa_1hot, extra_has_deletion[..., None], extra_deletion_value[..., None]),
                                          axis=-1)
         extra_msa_activations = self.extra_msa_activations(extra_msa_feat)
-        extra_msa_mask = extra_msa_mask.astype(mstype.float32)
-        extra_msa_mask_tmp = P.Transpose()(P.ExpandDims()(extra_msa_mask, -1), (2, 1, 0)).astype(self._type)
+        extra_msa_mask_tmp = P.Transpose()(P.ExpandDims()(extra_msa_mask, -1), (2, 1, 0))
         extra_msa_norm = P.Transpose()(self.batch_matmul_trans_b(extra_msa_mask_tmp, extra_msa_mask_tmp), (1, 2, 0))
         for i in range(self.extra_msa_stack_num):
             extra_msa_activations, pair_activations = \
@@ -209,14 +205,13 @@ class MFold(nn.Cell):
                                                  mnp.reshape(alt_torsion_angles_sin_cos, [num_templ, num_res, 14]),
                                                  torsion_angles_mask], axis=-1)
             template_activations = self.template_single_embedding(template_features)
-            template_activations = self.relu(template_activations.astype(mstype.float32))
+            template_activations = self.relu(template_activations)
             template_activations = self.template_projection(template_activations)
             msa_activations = mnp.concatenate([msa_activations, template_activations], axis=0)
             torsion_angle_mask = torsion_angles_mask[:, :, 2]
-            torsion_angle_mask = torsion_angle_mask.astype(msa_mask.dtype)
             msa_mask = mnp.concatenate([msa_mask, torsion_angle_mask], axis=0)
 
-        msa_mask_tmp = P.Transpose()(P.ExpandDims()(msa_mask, -1), (2, 1, 0)).astype(mstype.float16)
+        msa_mask_tmp = P.Transpose()(P.ExpandDims()(msa_mask, -1), (2, 1, 0))
         msa_mask_norm = P.Transpose()(self.batch_matmul_trans_b(msa_mask_tmp, msa_mask_tmp), (1, 2, 0))
         if self.is_training:
             for i in range(self.msa_stack_num):

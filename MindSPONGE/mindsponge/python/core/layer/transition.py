@@ -48,20 +48,18 @@ class Transition(nn.Cell):
         if self.batch_size:
             input_layer_norm_gamma = P.Gather()(self.input_layer_norm_gammas, index, 0)
             input_layer_norm_beta = P.Gather()(self.input_layer_norm_betas, index, 0)
-            transition1_weight = P.Cast()(P.Gather()(self.transition1_weights, index, 0), self._type)
-            transition1_bias = P.Cast()(P.Gather()(self.transition1_biases, index, 0), self._type)
-            transition2_weight = P.Cast()(P.Gather()(self.transition2_weights, index, 0), self._type)
-            transition2_bias = P.Cast()(P.Gather()(self.transition2_biases, index, 0), self._type)
+            transition1_weight = P.Gather()(self.transition1_weights, index, 0)
+            transition1_bias = P.Gather()(self.transition1_biases, index, 0)
+            transition2_weight = P.Gather()(self.transition2_weights, index, 0)
+            transition2_bias = P.Gather()(self.transition2_biases, index, 0)
         else:
             input_layer_norm_gamma = self.input_layer_norm_gammas
             input_layer_norm_beta = self.input_layer_norm_betas
-            transition1_weight = P.Cast()(self.transition1_weights, self._type)
-            transition1_bias = P.Cast()(self.transition1_biases, self._type)
-            transition2_weight = P.Cast()(self.transition2_weights, self._type)
-            transition2_bias = P.Cast()(self.transition2_biases, self._type)
-        act = P.Cast()(act, mstype.float32)
+            transition1_weight = self.transition1_weights
+            transition1_bias = self.transition1_biases
+            transition2_weight = self.transition2_weights
+            transition2_bias = self.transition2_biases
         act, _, _ = self.input_layer_norm(act, input_layer_norm_gamma, input_layer_norm_beta)
-        act = P.Cast()(act, self._type)
         if self.slice_num:
             act_ori_shape = P.Shape()(act)
             slice_shape = (self.slice_num, -1) + act_ori_shape[1:]

@@ -451,7 +451,6 @@ class Feature:
                 result_array[key] = np.concatenate(result_array[key], axis=0)
         else:
             result_array = {key: protein[key][None] for key in protein.keys()}
-
         features = {k: v for k, v in result_array.items() if v.dtype != 'O'}
 
         extra_msa_length = cfg.common.max_extra_msa
