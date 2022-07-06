@@ -711,6 +711,16 @@ restypes_with_x_and_gap = restypes + ['X', '-']
 MAP_HHBLITS_AATYPE_TO_OUR_AATYPE = tuple(restypes_with_x_and_gap.index(ID_TO_HHBLITS_AA[i])
                                          for i in range(len(restypes_with_x_and_gap)))
 
+MSA_GAP_IDX = restypes_with_x_and_gap.index('-')
+MSA_PAD_VALUES = {'msa_all_seq': MSA_GAP_IDX,
+                  'msa_mask_all_seq': 1,
+                  'deletion_matrix_all_seq': 0,
+                  'deletion_matrix_int_all_seq': 0,
+                  'msa': MSA_GAP_IDX,
+                  'msa_mask': 1,
+                  'deletion_matrix': 0,
+                  'deletion_matrix_int': 0}
+
 
 def _make_standard_atom_mask() -> np.ndarray:
     """Returns [num_res_types, num_atom_types] mask array."""
@@ -805,15 +815,14 @@ def _make_rigid_group_constants():
     """Fill the arrays above."""
     for restype, restype_letter in enumerate(restypes):
         resname = restype_1to3.get(restype_letter)
-        for atomname, group_idx, atom_position in rigid_group_atom_positions[
-                resname]:
+        for atomname, group_idx, atom_position in rigid_group_atom_positions.get(resname):
             atomtype = atom_order[atomname]
             restype_atom37_to_rigid_group[restype, atomtype] = group_idx
             restype_atom37_mask[restype, atomtype] = 1
             restype_atom37_rigid_group_positions[restype,
                                                  atomtype, :] = atom_position
 
-            atom14idx = restype_name_to_atom14_names[resname].index(atomname)
+            atom14idx = restype_name_to_atom14_names.get(resname).index(atomname)
             restype_atom14_to_rigid_group[restype, atom14idx] = group_idx
             restype_atom14_mask[restype, atom14idx] = 1
             restype_atom14_rigid_group_positions[restype,
@@ -883,7 +892,7 @@ def make_atom14_dists_bounds(overlap_tolerance=1.5, bond_length_tolerance_factor
     residue_bonds, residue_virtual_bonds, _ = load_stereo_chemical_props()
     for restype, restype_letter in enumerate(restypes):
         resname = restype_1to3.get(restype_letter)
-        atom_list = restype_name_to_atom14_names[resname]
+        atom_list = restype_name_to_atom14_names.get(resname)
 
         # create lower and upper bounds for clashes
         for atom1_idx, atom1_name in enumerate(atom_list):

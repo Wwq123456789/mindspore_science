@@ -14,11 +14,11 @@
 # ============================================================================
 """data transform MSA TEMPLATE"""
 import numpy as np
-from mindsponge.common.residue_constants import chi_angles_mask, chi_pi_periodic, \
- restype_1to3, chi_angles_atoms, atom_order, residue_atom_renaming_swaps, restype_3to1, \
- MAP_HHBLITS_AATYPE_TO_OUR_AATYPE, restype_order, restypes, \
- restype_name_to_atom14_names, atom_types, residue_atoms
 import mindsponge.common.geometry as geometry
+from mindsponge.common.residue_constants import chi_angles_mask, chi_pi_periodic, restype_1to3, chi_angles_atoms,\
+    atom_order, residue_atom_renaming_swaps, restype_3to1, MAP_HHBLITS_AATYPE_TO_OUR_AATYPE, restype_order,\
+    restypes, restype_name_to_atom14_names, atom_types, residue_atoms, STANDARD_ATOM_MASK, restypes_with_x_and_gap,\
+    MSA_PAD_VALUES
 
 MS_MIN32 = -2147483648
 MS_MAX32 = 2147483647
@@ -584,7 +584,7 @@ def atom37_to_frames(
 
     rotation = [[gt_frames[0][0], gt_frames[0][1], gt_frames[0][2]],
                 [gt_frames[0][3], gt_frames[0][4], gt_frames[0][5]],
-                [gt_frames[0][6], gt_frames[0][7], gt_frames[0][8]]],
+                [gt_frames[0][6], gt_frames[0][7], gt_frames[0][8]]]
     translation = [gt_frames[1][0], gt_frames[1][1], gt_frames[1][2]]
     backbone_affine_tensor = to_tensor(rotation[0], translation)[:, 0, :]
     return {
@@ -665,3 +665,105 @@ def to_tensor(rotation, translation):
         [quaternion] +
         [np.expand_dims(x, axis=-1) for x in translation],
         axis=-1)
+
+
+def convert_monomer_features(chain_id, aatype, template_aatype):
+    """Reshapes and modifies monomer features for multimer models."""
+
+    auth_chain_id = np.asarray(chain_id, dtype=np.object_)
+    new_order_list = MAP_HHBLITS_AATYPE_TO_OUR_AATYPE
+    monomer_aatype = np.argmax(aatype, axis=-1).astype(np.int32)
+    monomer_template_aatype = np.argmax(template_aatype, axis=-1).astype(np.int32)
+    monomer_template_aatype = np.take(new_order_list, monomer_template_aatype.astype(np.int32), axis=0)
+
+    return auth_chain_id, monomer_aatype, monomer_template_aatype
+
+
+def convert_unnecessary_leading_dim_feats(sequence, domain_name, num_alignments, seq_length):
+    """get first dimension data of unnecessary features."""
+
+    monomer_sequence = np.asarray(sequence[0], dtype=sequence.dtype)
+    monomer_domain_name = np.asarray(domain_name[0], dtype=domain_name.dtype)
+    monomer_num_alignments = np.asarray(num_alignments[0], dtype=num_alignments.dtype)
+    monomer_seq_length = np.asarray(seq_length[0], dtype=seq_length.dtype)
+
+    converted_feature = (monomer_sequence, monomer_domain_name, monomer_num_alignments, monomer_seq_length)
+    return converted_feature
+
+
+def process_unmerged_features(deletion_matrix_int, deletion_matrix_int_all_seq, aatype, entity_id, num_chains):
+    """Postprocessing stage for per-chain features before merging."""
+    # Convert deletion matrices to float.
+    deletion_matrix = np.asarray(deletion_matrix_int, dtype=np.float32)
+    deletion_matrix_all_seq = np.asarray(deletion_matrix_int_all_seq, dtype=np.float32)
+
+    all_atom_mask = STANDARD_ATOM_MASK[aatype]
+    all_atom_mask = all_atom_mask
+    all_atom_positions = np.zeros(list(all_atom_mask.shape) + [3])
+    deletion_mean = np.mean(deletion_matrix, axis=0)
+
+    # Add assembly_num_chains.
+    assembly_num_chains = np.asarray(num_chains)
+    entity_mask = (entity_id != 0).astype(np.int32)
+    post_feature = (deletion_matrix, deletion_matrix_all_seq, deletion_mean, all_atom_mask, all_atom_positions,
+                    assembly_num_chains, entity_mask)
+
+    return post_feature
+
+
+def get_crop_size(num_alignments_all_seq, msa_all_seq, msa_crop_size, msa_size):
+    """get maximum msa crop size
+
+    Args:
+        num_alignments_all_seq: num_alignments for all sequence, which record the total number of msa
+        msa_all_seq: un-paired sequences for all msa.
+        msa_crop_size: The total number of sequences to crop from the MSA.
+        msa_size: number of msa
+
+    Returns:
+        msa_crop_size: msa sized to be cropped
+        msa_crop_size_all_seq: msa_crop_size for features with "_all_seq"
+
+    """
+
+    msa_size_all_seq = num_alignments_all_seq
+    msa_crop_size_all_seq = np.minimum(msa_size_all_seq, msa_crop_size // 2)
+
+    # We reduce the number of un-paired sequences, by the number of times a
+    # sequence from this chain's MSA is included in the paired MSA.  This keeps
+    # the MSA size for each chain roughly constant.
+    msa_all_seq = msa_all_seq[:msa_crop_size_all_seq, :]
+    num_non_gapped_pairs = np.sum(np.any(msa_all_seq != restypes_with_x_and_gap.index('-'), axis=1))
+    num_non_gapped_pairs = np.minimum(num_non_gapped_pairs, msa_crop_size_all_seq)
+
+    # Restrict the unpaired crop size so that paired+unpaired sequences do not
+    # exceed msa_seqs_per_chain for each chain.
+    max_msa_crop_size = np.maximum(msa_crop_size - num_non_gapped_pairs, 0)
+    msa_crop_size = np.minimum(msa_size, max_msa_crop_size)
+    return msa_crop_size, msa_crop_size_all_seq
+
+
+def make_seq_mask(entity_id):
+    """seq mask info, True for entity_id > 0, False for entity_id <= 0."""
+
+    seq_mask = (entity_id > 0).astype(np.float32)
+    return seq_mask
+
+
+def make_msa_mask(msa, entity_id):
+    """Mask features are all ones, but will later be zero-padded."""
+
+    msa_mask = np.ones_like(msa, dtype=np.float32)
+
+    seq_mask = (entity_id > 0).astype(np.float32)
+    msa_mask *= seq_mask[None]
+
+    return msa_mask
+
+
+def add_padding(feature_name, feature):
+    """get padding data with specified shapes of feature"""
+
+    num_res = feature.shape[1]
+    padding = MSA_PAD_VALUES.get(feature_name) * np.ones([1, num_res], feature.dtype)
+    return padding
