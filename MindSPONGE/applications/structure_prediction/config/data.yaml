@@ -3,6 +3,7 @@ block_deletion:
   num_blocks: 5
   randomize_num_blocks: true
 common:
+  random_recycle: false
   distillation: false
   replace_proportion: 0.0
   masked_msa:

@@ -47,12 +47,6 @@ def randomly_replace_msa_with_unknown(msa, aatype, replace_proportion):
     return msa, aatype
 
 
-def make_random_crop_to_size_seed(protein):
-    """Random seed for cropping residues and templates."""
-    protein['random_crop_to_size_seed'] = np.array(make_random_seed([2], seed_maker_t=seed_maker()), np.int32)
-    return protein
-
-
 def fix_templates_aatype(template_aatype):
     """Fixes aatype encoding of templates."""
     # Map one-hot to indices.
@@ -65,7 +59,7 @@ def fix_templates_aatype(template_aatype):
 
 
 def pseudo_beta_fn(aatype, all_atom_positions, all_atom_masks):
-    """Create pseudo beta features."""
+    """compute pseudo beta features from atom positions"""
     is_gly = np.equal(aatype, restype_order['G'])
     ca_idx = atom_order['CA']
     cb_idx = atom_order['CB']
@@ -73,7 +67,7 @@ def pseudo_beta_fn(aatype, all_atom_positions, all_atom_masks):
         np.tile(is_gly[..., None].astype("int32"), [1,] * len(is_gly.shape) + [3,]).astype("bool"),
         all_atom_positions[..., ca_idx, :],
         all_atom_positions[..., cb_idx, :])
-    if all_atom_masks is not None:
+    if all_atom_masks:
         pseudo_beta_mask = np.where(is_gly, all_atom_masks[..., ca_idx], all_atom_masks[..., cb_idx])
         pseudo_beta_mask = pseudo_beta_mask.astype(np.float32)
         return pseudo_beta, pseudo_beta_mask
@@ -81,42 +75,40 @@ def pseudo_beta_fn(aatype, all_atom_positions, all_atom_masks):
 
 
 def make_atom14_masks(aatype):
-    """Construct denser atom positions (14 dimensions instead of 37)."""
-    restype_atom14_to_atom37 = []  # mapping (restype, atom14) --> atom37
-    restype_atom37_to_atom14 = []  # mapping (restype, atom37) --> atom14
-    restype_atom14_mask = []
+    """create atom 14 position features from aatype"""
+    rt_atom14_to_atom37 = []
+    rt_atom37_to_atom14 = []
+    rt_atom14_mask = []
 
-    for rt in restypes:
-        atom_names = restype_name_to_atom14_names.get(restype_1to3.get(rt))
+    for restype in restypes:
+        atom_names = restype_name_to_atom14_names.get(restype_1to3.get(restype))
 
-        restype_atom14_to_atom37.append([(atom_order[name] if name else 0) for name in atom_names])
+        rt_atom14_to_atom37.append([(atom_order[name] if name else 0) for name in atom_names])
 
         atom_name_to_idx14 = {name: i for i, name in enumerate(atom_names)}
-        restype_atom37_to_atom14.append([(atom_name_to_idx14[name] if name in atom_name_to_idx14 else 0)
-                                         for name in atom_types])
+        rt_atom37_to_atom14.append([(atom_name_to_idx14[name] if name in atom_name_to_idx14 else 0)
+                                    for name in atom_types])
 
-        restype_atom14_mask.append([(1. if name else 0.) for name in atom_names])
+        rt_atom14_mask.append([(1. if name else 0.) for name in atom_names])
 
     # Add dummy mapping for restype 'UNK'
-    restype_atom14_to_atom37.append([0] * 14)
-    restype_atom37_to_atom14.append([0] * 37)
-    restype_atom14_mask.append([0.] * 14)
+    rt_atom14_to_atom37.append([0] * 14)
+    rt_atom37_to_atom14.append([0] * 37)
+    rt_atom14_mask.append([0.] * 14)
 
-    restype_atom14_to_atom37 = np.array(restype_atom14_to_atom37, np.int32)
-    restype_atom37_to_atom14 = np.array(restype_atom37_to_atom14, np.int32)
-    restype_atom14_mask = np.array(restype_atom14_mask, np.float32)
+    rt_atom14_to_atom37 = np.array(rt_atom14_to_atom37, np.int32)
+    rt_atom37_to_atom14 = np.array(rt_atom37_to_atom14, np.int32)
+    rt_atom14_mask = np.array(rt_atom14_mask, np.float32)
 
-    # create the mapping for (residx, atom14) --> atom37, i.e. an array
-    # with shape (num_res, 14) containing the atom37 indices for this protein
-    residx_atom14_to_atom37 = restype_atom14_to_atom37[aatype]
-    residx_atom14_mask = restype_atom14_mask[aatype]
+    ri_atom14_to_atom37 = rt_atom14_to_atom37[aatype]
+    ri_atom14_mask = rt_atom14_mask[aatype]
 
-    atom14_atom_exists = residx_atom14_mask
-    residx_atom14_to_atom37 = residx_atom14_to_atom37
+    atom14_atom_exists = ri_atom14_mask
+    ri_atom14_to_atom37 = ri_atom14_to_atom37
 
     # create the gather indices for mapping back
-    residx_atom37_to_atom14 = restype_atom37_to_atom14[aatype]
-    residx_atom37_to_atom14 = residx_atom37_to_atom14
+    ri_atom37_to_atom14 = rt_atom37_to_atom14[aatype]
+    ri_atom37_to_atom14 = ri_atom37_to_atom14
 
     # create the corresponding mask
     restype_atom37_mask = np.zeros([21, 37], np.float32)
@@ -128,7 +120,7 @@ def make_atom14_masks(aatype):
             restype_atom37_mask[restype, atom_type] = 1
 
     atom37_atom_exists = restype_atom37_mask[aatype]
-    res = [atom14_atom_exists, residx_atom14_to_atom37, residx_atom37_to_atom14, atom37_atom_exists]
+    res = [atom14_atom_exists, ri_atom14_to_atom37, ri_atom37_to_atom14, atom37_atom_exists]
     return res
 
 
@@ -181,28 +173,49 @@ def sample_msa(msa, max_seq):
     return is_sel, not_sel_seq, sel_seq
 
 
+def shape_list(x):
+    """get the list of dimensions of an array"""
+    x = np.array(x)
+    if x.ndim is None:
+        return x.shape
+
+    static = x.shape
+    ret = []
+    for _, dimension in enumerate(static):
+        ret.append(dimension)
+    return ret
+
+
+def shaped_categorical(probability):
+    """get categorical shape"""
+    ds = shape_list(probability)
+    num_classes = ds[-1]
+    flat_probs = np.reshape(probability, (-1, num_classes))
+    numbers = list(range(num_classes))
+    res = []
+    for flat_prob in flat_probs:
+        res.append(np.random.choice(numbers, p=flat_prob))
+    return np.reshape(np.array(res, np.int32), ds[:-1])
+
+
 def make_masked_msa(msa, hhblits_profile, uniform_prob, profile_prob, same_prob, replace_fraction):
-    """Create data for BERT on raw MSA."""
-    # Add a random amino acid uniformly
-    random_aa = np.array([0.05] * 20 + [0., 0.], dtype=np.float32)
+    """create masked msa for BERT on raw MSA features"""
+    random_aatype = np.array([0.05] * 20 + [0., 0.], dtype=np.float32)
 
-    categorical_probs = uniform_prob * random_aa + profile_prob * hhblits_profile + \
-                        same_prob * one_hot(22, msa)
+    probability = uniform_prob * random_aatype + profile_prob * hhblits_profile + same_prob * one_hot(22, msa)
 
-    # Put all remaining probability on [MASK] which is a new column
-    pad_shapes = [[0, 0] for _ in range(len(categorical_probs.shape))]
+    pad_shapes = [[0, 0] for _ in range(len(probability.shape))]
     pad_shapes[-1][1] = 1
-    mask_prob = 1. - config.profile_prob - config.same_prob - config.uniform_prob
-    assert mask_prob >= 0.
-    categorical_probs = np.pad(categorical_probs, pad_shapes, constant_values=(mask_prob,))
+    mask_prob = 1. - profile_prob - same_prob - uniform_prob
 
-    mask_position = np.random.uniform(size=msa.shape, low=0, high=1) < replace_fraction
+    probability = np.pad(probability, pad_shapes, constant_values=(mask_prob,))
 
-    bert_msa = shaped_categorical(categorical_probs)
-    bert_msa = np.where(mask_position, bert_msa, msa)
+    masked_aatype = np.random.uniform(size=msa.shape, low=0, high=1) < replace_fraction
 
-    # Mix real and masked MSA
-    bert_mask = mask_position.astype(np.int32)
+    bert_msa = shaped_categorical(probability)
+    bert_msa = np.where(masked_aatype, bert_msa, msa)
+
+    bert_mask = masked_aatype.astype(np.int32)
     true_msa = msa
     msa = bert_msa
     return bert_mask, true_msa, msa
@@ -307,13 +320,16 @@ def make_msa_feat(between_segment_residues, aatype, msa, deletion_matrix, cluste
     return res
 
 
-def make_random_seed(size, seed_maker_t, low=MS_MIN32, high=MS_MAX32):
+def make_random_seed(size, seed_maker_t, low=MS_MIN32, high=MS_MAX32, random_recycle=False):
+    if random_recycle:
+        r = np.random.RandomState(seed_maker_t)
+        return r.random.uniform(size=size, low=low, high=high)
     np.random.seed(seed_maker_t)
     return np.random.uniform(size=size, low=low, high=high)
 
 
 def random_crop_to_size(seq_length, template_mask, crop_size, max_templates,
-                        subsample_templates=False, seed=0):
+                        subsample_templates=False, seed=0, random_recycle=False):
     """Crop randomly to `crop_size`, or keep as is if shorter than that."""
     seq_length = seq_length
     seq_length_int = int(seq_length)
@@ -329,7 +345,8 @@ def random_crop_to_size(seq_length, template_mask, crop_size, max_templates,
     # Do not use for randomness that should vary in ensembling.
 
     if subsample_templates:
-        templates_crop_start = int(make_random_seed(size=(), seed_maker_t=seed, low=0, high=num_templates + 1))
+        templates_crop_start = int(make_random_seed(size=(), seed_maker_t=seed, low=0, high=num_templates + 1,
+                                                    random_recycle=random_recycle))
     else:
         templates_crop_start = 0
 
@@ -337,9 +354,11 @@ def random_crop_to_size(seq_length, template_mask, crop_size, max_templates,
     num_templates_crop_size_int = int(num_templates_crop_size)
 
     num_res_crop_start = int(make_random_seed(size=(), seed_maker_t=seed, low=0,
-                                              high=seq_length_int - num_res_crop_size_int + 1))
+                                              high=seq_length_int - num_res_crop_size_int + 1,
+                                              random_recycle=random_recycle))
 
-    templates_select_indices = np.argsort(make_random_seed(size=[num_templates], seed_maker_t=seed))
+    templates_select_indices = np.argsort(make_random_seed(size=[num_templates], seed_maker_t=seed,
+                                                           random_recycle=random_recycle))
     res = [num_res_crop_size, num_templates_crop_size_int, num_res_crop_start, num_res_crop_size_int, \
            templates_crop_start, templates_select_indices]
     return res

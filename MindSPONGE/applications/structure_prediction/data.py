@@ -297,7 +297,7 @@ class Feature:
     def ensemble(self, data, msa_fraction_per_block=0.3, randomize_num_blocks=True, num_blocks=5, keep_extra=True,
                  max_msa_clusters=124, masked_msa=None, uniform_prob=0.1, profile_prob=0.1, same_prob=0.1,
                  replace_fraction=0.15, msa_cluster_features=True, max_extra_msa=1024, crop_size=256, max_templates=4,
-                 subsample_templates=True, fixed_size=True, seed=0):
+                 subsample_templates=True, fixed_size=True, seed=0, random_recycle=False):
         """ensemble"""
         self.ensemble_num += 1
         # exist numpy random op
@@ -352,7 +352,7 @@ class Feature:
             num_res_crop_size, num_templates_crop_size_int, num_res_crop_start, num_res_crop_size_int, \
             templates_crop_start, templates_select_indices = random_crop_to_size(
                 data["seq_length"], data["template_mask"], crop_size, max_templates,
-                subsample_templates, seed)
+                subsample_templates, seed, random_recycle)
             for k, v in data.items():
                 if k not in feature_list or ('template' not in k and NUM_RES not in feature_list.get(k)):
                     continue
@@ -443,7 +443,7 @@ class Feature:
         max_msa_clusters = cfg.eval.max_msa_clusters
         if cfg.common.reduce_msa_clusters_by_max_templates:
             max_msa_clusters = cfg.eval.max_msa_clusters - cfg.eval.max_templates
-
+        random_recycle = cfg.common.random_recycle
         non_ensemble_data_copy = non_ensemble_data.copy()
         protein = self.ensemble(non_ensemble_data_copy,
                                 cfg.block_deletion.msa_fraction_per_block,
@@ -462,7 +462,8 @@ class Feature:
                                 cfg.eval.max_templates,
                                 cfg.eval.subsample_templates,
                                 cfg.eval.fixed_size,
-                                seed)
+                                seed,
+                                random_recycle)
         num_ensemble = cfg.eval.num_ensemble
         num_recycle = cfg.common.num_recycle
         if cfg.common.resample_msa_in_recycling:
@@ -489,7 +490,8 @@ class Feature:
                                        cfg.eval.max_templates,
                                        cfg.eval.subsample_templates,
                                        cfg.eval.fixed_size,
-                                       seed)
+                                       seed,
+                                       random_recycle)
                 for key in protein.keys():
                     result_array[key] += (data_t[key][None],)
             for key in protein.keys():
