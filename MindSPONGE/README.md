@@ -42,10 +42,11 @@ MindSPONGE(Simulation Package Of Next GEneration molecular modelling)是基于[�
 ```
 
 - 蛋白质 violation 计算
+    ###### 使蛋白质推理模型预测的pdb虽然在绝大多数原子上都准确预测出理想的键长和键角，然而原子间是否存在冲突以及肽键信息对于真实结构也尤为重要，violation 则计算了预测pdb的总原子间冲突程度以及肽键键长键角是否满足一定的限制条件。该计算数值对于评估预测蛋白质结构是否合理以及后续做蛋白质relax尤其重要
 
 ```bash
-import mindsponge as msp
-violation = msp.metrics.violation()
+from mindsponge.core.loss import get_violation_loss
+violation, _ = get_violation_loss(pdb_path)
 ```
 
 - 四元数与旋转矩阵转换

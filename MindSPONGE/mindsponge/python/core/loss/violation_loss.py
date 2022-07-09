@@ -80,7 +80,7 @@ def get_violation_loss(pdb_path=None, atom14_atom_exists=None, residue_index=Non
     cys_sg_idx_t = Tensor(CYS_SG_IDX, ms.int32)
 
     (bonds_c_n_loss_mean, angles_ca_c_n_loss_mean, angles_c_n_ca_loss_mean, _, _, _, clashes_per_atom_loss_sum,
-     _, per_atom_loss_sum, _, _) = \
+     _, per_atom_loss_sum, _, total_per_residue_violations_mask) = \
         find_structural_violations(atom14_atom_exists, residue_index, aatype, residx_atom14_to_atom37,
                                    atom14_positions, VIOLATION_TOLERANCE_ACTOR,
                                    CLASH_OVERLAP_TOLERANCE, lower_bound_t, upper_bound_t, atom_type_radius_t,
@@ -89,4 +89,4 @@ def get_violation_loss(pdb_path=None, atom14_atom_exists=None, residue_index=Non
     structure_violation_loss = bonds_c_n_loss_mean + angles_ca_c_n_loss_mean + angles_c_n_ca_loss_mean +\
                                P.ReduceSum()(clashes_per_atom_loss_sum + per_atom_loss_sum) / (1e-6 + num_atoms)
 
-    return structure_violation_loss
+    return structure_violation_loss, total_per_residue_violations_mask

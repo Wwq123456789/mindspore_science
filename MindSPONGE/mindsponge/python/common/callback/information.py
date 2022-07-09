@@ -13,12 +13,14 @@
 # limitations under the License.
 # ============================================================================
 """information"""
+
 from mindspore.train.callback import Callback, RunContext
 from ...core.space.system import SystemCell
 
 
 class RunInfo(Callback):
     """run information"""
+
     def __init__(
             self,
             system: SystemCell,
@@ -29,7 +31,8 @@ class RunInfo(Callback):
             aatype=None,
             crd_mapping_masks=None,
             crd_mapping_ids=None,
-            nonh_mask=None
+            nonh_mask=None,
+            print_interval=100,
     ):
         super().__init__()
 
@@ -46,7 +49,8 @@ class RunInfo(Callback):
         self.aatype = aatype
         self.crd_mapping_masks = crd_mapping_masks
         self.crd_mapping_ids = crd_mapping_ids
-        self.nonh_mask = 1 - nonh_mask
+        self.nonh_mask = nonh_mask
+        self.print_interval = print_interval
 
     def __enter__(self):
         """Return the enter target."""
@@ -55,38 +59,9 @@ class RunInfo(Callback):
     def __exit__(self, *err):
         """Release resources here if have any."""
 
-    def begin(self, run_context: RunContext):
-        """
-        Called once before the network executing.
-
-        Args:
-            run_context (RunContext): Include some information of the model.
-        """
-        cb_params = run_context.original_args()
-        print('>>>>>>>>>>>>>>>>>>>> Initialized <<<<<<<<<<<<<<<<<<<<')
-        self.kinetic = cb_params.kinetic.squeeze().asnumpy()
-        self.temperature = cb_params.temperature.squeeze().asnumpy()
-
-    def epoch_begin(self, run_context: RunContext):
-        """
-        Called before each epoch beginning.
-
-        Args:
-            run_context (RunContext): Include some information of the model.
-        """
-
-    def epoch_end(self, run_context: RunContext):
-        """
-        Called after each epoch finished.
-
-        Args:
-            run_context (RunContext): Include some information of the model.
-        """
-
     def step_begin(self, run_context: RunContext):
         """
         Called before each step beginning.
-
         Args:
             run_context (RunContext): Include some information of the model.
         """
@@ -96,10 +71,20 @@ class RunInfo(Callback):
         self.kinetic = cb_params.kinetic.squeeze().asnumpy()
         self.temperature = cb_params.temperature.squeeze().asnumpy()
 
+    def begin(self, run_context: RunContext):
+        """
+        Called once before the network executing.
+        Args:
+            run_context (RunContext): Include some information of the model.
+        """
+        cb_params = run_context.original_args()
+        print('>>>>>>>>>>>>>>>>>>>> Initialized <<<<<<<<<<<<<<<<<<<<')
+        self.kinetic = cb_params.kinetic.squeeze().asnumpy()
+        self.temperature = cb_params.temperature.squeeze().asnumpy()
+
     def step_end(self, run_context: RunContext):
         """
         Called after each step finished.
-
         Args:
             run_context (RunContext): Include some information of the model.
         """
@@ -109,17 +94,32 @@ class RunInfo(Callback):
         self.potential = cb_params.energy.squeeze().asnumpy()
         self.tot_energy = self.potential + self.kinetic
 
-        info = 'Step: ' + str(step) + ', '
+        info = 'Step: ' + str(step + 1) + ', '
         info += 'E_pot: ' + str(self.potential) + ', '
         info += 'E_kin: ' + str(self.kinetic) + ', '
         info += 'E_tot: ' + str(self.tot_energy) + ', '
         info += 'Temperature: ' + str(self.temperature) + ', '
-        print(info)
+
+        if (step + 1) % self.print_interval == 0:
+            print(info)
 
     def end(self, run_context: RunContext):
         """
         Called once after network training.
+        Args:
+            run_context (RunContext): Include some information of the model.
+        """
 
+    def epoch_begin(self, run_context: RunContext):
+        """
+        Called before each epoch beginning.
+        Args:
+            run_context (RunContext): Include some information of the model.
+        """
+
+    def epoch_end(self, run_context: RunContext):
+        """
+        Called after each epoch finished.
         Args:
             run_context (RunContext): Include some information of the model.
         """
