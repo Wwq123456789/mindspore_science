@@ -15,18 +15,16 @@
 """utils module"""
 
 import numpy as np
-from scipy.special import softmax
 from Bio import Align
 from Bio.Align import substitution_matrices
-
-from mindspore.ops import operations as P
-import mindspore.numpy as mnp
 from mindspore import nn
+import mindspore.numpy as mnp
 from mindspore.common.tensor import Tensor
+from mindspore.ops import operations as P
+from scipy.special import softmax
 
-from . import residue_constants, protein
 from . import r3
-
+from . import residue_constants, protein
 
 QUAT_TO_ROT = np.zeros((4, 4, 3, 3), dtype=np.float32)
 
@@ -1090,18 +1088,18 @@ def rigids_to_quataffine(r):
         translation=[r.trans.x, r.trans.y, r.trans.z])
 
 
-def make_atom14_positions(prot):
+def make_atom14_positions(aatype, all_atom_mask, all_atom_positions):
     """Constructs denser atom positions (14 dimensions instead of 37).
     Args:
-        prot: dict with np.array datetype, include "aatype", "all_atom_positions" and "all_atom_mask"
+        input with "aatype", "all_atom_positions" and "all_atom_mask"
 
     Returns:
-        Dict contains:
         * 'atom14_atom_exists': atom14 position exists mask
         * 'atom14_gt_exists': ground truth atom14 position exists mask
         * 'atom14_gt_positions': ground truth atom14 positions
         * 'residx_atom14_to_atom37': mapping for (residx, atom14) --> atom37, i.e. an array
         * 'residx_atom37_to_atom14': gather indices for mapping back
+        * 'atom37_atom_exists': atom37 exists mask
         * 'atom14_alt_gt_positions': apply transformation matrices for the given residue sequence to the ground
          truth positions
         * 'atom14_alt_gt_exists': the mask for the alternative ground truth
@@ -1140,28 +1138,25 @@ def make_atom14_positions(prot):
 
     # Create the mapping for (residx, atom14) --> atom37, i.e. an array
     # with shape (num_res, 14) containing the atom37 indices for this protein.
-    residx_atom14_to_atom37 = restype_atom14_to_atom37[prot["aatype"]]
-    residx_atom14_mask = restype_atom14_mask[prot["aatype"]]
+    residx_atom14_to_atom37 = restype_atom14_to_atom37[aatype]
+    residx_atom14_mask = restype_atom14_mask[aatype]
 
     # Create a mask for known ground truth positions.
     residx_atom14_gt_mask = residx_atom14_mask * np.take_along_axis(
-        prot["all_atom_mask"], residx_atom14_to_atom37, axis=1).astype(np.float32)
+        all_atom_mask, residx_atom14_to_atom37, axis=1).astype(np.float32)
 
     # Gather the ground truth positions.
     residx_atom14_gt_positions = residx_atom14_gt_mask[:, :, None] * (
-        np.take_along_axis(prot["all_atom_positions"],
-                           residx_atom14_to_atom37[..., None],
-                           axis=1))
+        np.take_along_axis(all_atom_positions, residx_atom14_to_atom37[..., None], axis=1))
 
-    prot["atom14_atom_exists"] = residx_atom14_mask
-    prot["atom14_gt_exists"] = residx_atom14_gt_mask
-    prot["atom14_gt_positions"] = residx_atom14_gt_positions
+    atom14_atom_exists = residx_atom14_mask
+    atom14_gt_exists = residx_atom14_gt_mask
+    atom14_gt_positions = residx_atom14_gt_positions
 
-    prot["residx_atom14_to_atom37"] = residx_atom14_to_atom37
+    residx_atom14_to_atom37 = residx_atom14_to_atom37
 
     # Create the gather indices for mapping back.
-    residx_atom37_to_atom14 = restype_atom37_to_atom14[prot["aatype"]]
-    prot["residx_atom37_to_atom14"] = residx_atom37_to_atom14
+    residx_atom37_to_atom14 = restype_atom37_to_atom14[aatype]
 
     # Create the corresponding mask.
     restype_atom37_mask = np.zeros([21, 37], dtype=np.float32)
@@ -1172,8 +1167,7 @@ def make_atom14_positions(prot):
             atom_type = residue_constants.atom_order[atom_name]
             restype_atom37_mask[restype, atom_type] = 1
 
-    residx_atom37_mask = restype_atom37_mask[prot["aatype"]]
-    prot["atom37_atom_exists"] = residx_atom37_mask
+    atom37_atom_exists = restype_atom37_mask[aatype]
 
     # As the atom naming is ambiguous for 7 of the 20 amino acids, provide
     # alternative ground truth coordinates where the naming is swapped
@@ -1199,22 +1193,18 @@ def make_atom14_positions(prot):
 
     # Pick the transformation matrices for the given residue sequence
     # shape (num_res, 14, 14).
-    renaming_transform = renaming_matrices[prot["aatype"]]
+    renaming_transform = renaming_matrices[aatype]
 
     # Apply it to the ground truth positions. shape (num_res, 14, 3).
-    alternative_gt_positions = np.einsum("rac,rab->rbc",
-                                         residx_atom14_gt_positions,
-                                         renaming_transform)
-    prot["atom14_alt_gt_positions"] = alternative_gt_positions
+    alternative_gt_positions = np.einsum("rac,rab->rbc", residx_atom14_gt_positions, renaming_transform)
+    atom14_alt_gt_positions = alternative_gt_positions
 
     # Create the mask for the alternative ground truth (differs from the
     # ground truth mask, if only one of the atoms in an ambiguous pair has a
     # ground truth position).
-    alternative_gt_mask = np.einsum("ra,rab->rb",
-                                    residx_atom14_gt_mask,
-                                    renaming_transform)
+    alternative_gt_mask = np.einsum("ra,rab->rb", residx_atom14_gt_mask, renaming_transform)
 
-    prot["atom14_alt_gt_exists"] = alternative_gt_mask
+    atom14_alt_gt_exists = alternative_gt_mask
 
     # Create an ambiguous atoms mask.  shape: (21, 14).
     restype_atom14_is_ambiguous = np.zeros((21, 14), dtype=np.float32)
@@ -1228,9 +1218,11 @@ def make_atom14_positions(prot):
             restype_atom14_is_ambiguous[restype, atom_idx2] = 1
 
     # From this create an ambiguous_mask for the given sequence.
-    prot["atom14_atom_is_ambiguous"] = (
-        restype_atom14_is_ambiguous[prot["aatype"]])
-    return prot
+    atom14_atom_is_ambiguous = restype_atom14_is_ambiguous[aatype]
+    return_pack = (atom14_atom_exists, atom14_gt_exists, atom14_gt_positions, residx_atom14_to_atom37,
+                   residx_atom37_to_atom14, atom37_atom_exists, atom14_alt_gt_positions, atom14_alt_gt_exists,
+                   atom14_atom_is_ambiguous)
+    return return_pack
 
 
 def get_pdb_info(pdb_path):
@@ -1247,7 +1239,18 @@ def get_pdb_info(pdb_path):
     features = {'aatype': aatype,
                 'all_atom_positions': atom37_positions,
                 'all_atom_mask': atom37_mask}
-    features = make_atom14_positions(features)
+    atom14_atom_exists, atom14_gt_exists, atom14_gt_positions, residx_atom14_to_atom37, residx_atom37_to_atom14, \
+    atom37_atom_exists, atom14_alt_gt_positions, atom14_alt_gt_exists, atom14_atom_is_ambiguous = \
+        make_atom14_positions(aatype, atom37_positions, atom37_mask)
+    features.update({"atom14_atom_exists": atom14_atom_exists,
+                     "atom14_gt_exists": atom14_gt_exists,
+                     "atom14_gt_positions": atom14_gt_positions,
+                     "residx_atom14_to_atom37": residx_atom14_to_atom37,
+                     "residx_atom37_to_atom14": residx_atom37_to_atom14,
+                     "atom37_atom_exists": atom37_atom_exists,
+                     "atom14_alt_gt_positions": atom14_alt_gt_positions,
+                     "atom14_alt_gt_exists": atom14_alt_gt_exists,
+                     "atom14_atom_is_ambiguous": atom14_atom_is_ambiguous})
 
     features["residue_index"] = prot_pdb.residue_index
 

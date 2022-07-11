@@ -39,7 +39,7 @@ from mindsponge.core.simulation.sponge import Sponge
 from mindsponge.core.space.system import SystemCell
 from mindsponge.data.hyperparam import ReconstructProtein as Protein
 from mindsponge.data.pdb_generator import gen_pdb
-from mindsponge.data.pdb_parser import read_pdb_via_xponge as read_pdb
+from mindsponge.data.parsers import read_pdb_via_xponge as read_pdb
 
 os.environ['GLOG_v'] = '3'
 warnings.filterwarnings("ignore")

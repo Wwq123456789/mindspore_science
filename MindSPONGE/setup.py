@@ -25,7 +25,7 @@ cur_dir = os.path.dirname(os.path.realpath(__file__))
 pkg_dir = os.path.join(cur_dir, 'build')
 package_name = os.getenv('SPONGE_PACKAGE_NAME').replace("\n", "")
 package_data = {
-    '': ["*.txt", "libs/*.so"]
+    '': ["*.txt", "libs/*.so", "*.sh"]
 }
 
 def read_version():
