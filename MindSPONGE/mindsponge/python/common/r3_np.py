@@ -54,10 +54,10 @@ def invert_rots(inputs: Rots) -> Rots:
 
 def rigids_from_3_points(point_on_neg_x_axis: Vecs,
                          origin: Vecs,
-                         point_of_xy_level: Vecs) -> Rigids:
+                         point_on_xy_plane: Vecs) -> Rigids:
     """construct rigids from inputs 3 point"""
     e0_unnorm = vecs_sub(origin, point_on_neg_x_axis)
-    e1_unnorm = vecs_sub(point_of_xy_level, origin)
+    e1_unnorm = vecs_sub(point_on_xy_plane, origin)
     rotations = rots_from_two_vecs(
         e0_unnormalized=e0_unnorm,
         e1_unnormalized=e1_unnorm)
