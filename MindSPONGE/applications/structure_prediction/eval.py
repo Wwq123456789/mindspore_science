@@ -27,6 +27,7 @@ parser.add_argument('--model_config', help='model config')
 parser.add_argument('--pkl_path', help='processed raw feature path')
 parser.add_argument('--device_id', default=1, type=int, help='DEVICE_ID')
 parser.add_argument('--mixed_precision', default=1, type=int, help='whether to use mixed precision')
+parser.add_argument('--run_platform', default='Ascend', type=str, help='which platform to use, Ascend or GPU')
 args = parser.parse_args()
 
 
@@ -38,13 +39,20 @@ def load_pkl(pickle_path):
 
 
 if __name__ == "__main__":
-    context.set_context(mode=context.GRAPH_MODE,
-                        device_target="Ascend",
-                        max_device_memory="31GB",
-                        device_id=args.device_id,
-                        save_graphs=False,
-                        save_graphs_path="./graph1/")
-
+    if args.run_platform == 'Ascend':
+        context.set_context(mode=context.GRAPH_MODE,
+                            device_target="Ascend",
+                            max_device_memory="31GB",
+                            device_id=args.device_id)
+    elif args.run_platform == 'GPU':
+        context.set_context(mode=context.GRAPH_MODE,
+                            device_target="GPU",
+                            max_device_memory="31GB",
+                            device_id=args.device_id,
+                            enable_graph_kernel=True,
+                            graph_kernel_flags="--enable_expand_ops_only=Softmax --enable_cluster_ops_only=Add")
+    else:
+        raise Exception("Only support GPU or Ascend")
     raw_feature = load_pkl(args.pkl_path)
     data_cfg = load_config(args.data_config)
     model_cfg = load_config(args.model_config)
