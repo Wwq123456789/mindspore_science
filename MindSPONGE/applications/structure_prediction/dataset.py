@@ -24,8 +24,7 @@ from mindspore.communication import get_rank
 from mindsponge.common.residue_constants import make_atom14_dists_bounds
 from mindsponge.common.protein import from_pdb_string
 from mindsponge.common.utils import make_atom14_positions
-from mindsponge.data.data_transform import pseudo_beta_fn
-from mindsponge.data.label_process import atom37_to_frames, atom37_to_torsion_angles
+from mindsponge.data.data_transform import pseudo_beta_fn, atom37_to_frames, atom37_to_torsion_angles
 from data import Feature
 
 

@@ -119,6 +119,134 @@ def rigids_mul_vecs(rot, trans, v):
     return vecs_add(rots_mul_vecs(rot, v), trans)
 
 
-def rigids_to_tensor_flat12(r):
-    """Flat12 encoding: rotation matrix (9 floats) + translation (3 floats)."""
-    return np.stack(list(r.rot) + list(r.trans), axis=-1)
+# numpy version of r3
+
+def invert_rots_np(inputs):
+    """Computes inverse of rotations 'm'."""
+    out = (inputs[0], inputs[3], inputs[6],
+           inputs[1], inputs[4], inputs[7],
+           inputs[2], inputs[5], inputs[8])
+    return out
+
+
+def invert_rigids_np(rigids):
+    """numpy version of getting invert rigids"""
+    rotation_invert = invert_rots_np(rigids[0])
+    trans = rots_mul_vecs_np(rotation_invert, rigids[1])
+    trans_invert = (-trans[0], -trans[1], -trans[2])
+    return rotation_invert, trans_invert
+
+
+def vecs_robust_norm_np(v, epsilon=1e-8):
+    """numpy version of computing norm of vectors 'v'."""
+    return np.sqrt(np.square(v[0]) + np.square(v[1]) + np.square(v[2]) + epsilon)
+
+
+def vecs_robust_normalize_np(v, epsilon=1e-8):
+    """numpy version of normalization vectors 'v'."""
+    norms = vecs_robust_norm_np(v, epsilon)
+    return (v[0] / norms, v[1] / norms, v[2] / norms)
+
+
+def vecs_cross_vecs_np(v1, v2):
+    """numpy version of cross product of vectors 'v1' and 'v2'."""
+    return (v1[1] * v2[2] - v1[2] * v2[1],
+            v1[2] * v2[0] - v1[0] * v2[2],
+            v1[0] * v2[1] - v1[1] * v2[0])
+
+
+def vecs_dot_vecs_np(v1, v2):
+    """numpy version of dot product of vectors 'v1' and 'v2'."""
+    return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]
+
+
+def rots_from_two_vecs_np(e0_unnormalized, e1_unnormalized):
+    """numpy version of creating rotation matrices from unnormalized vectors for the x and y-axes."""
+    # Normalize the unit vector for the x-axis, e0.
+    e0 = vecs_robust_normalize_np(e0_unnormalized)
+
+    # make e1 perpendicular to e0.
+    c = vecs_dot_vecs_np(e1_unnormalized, e0)
+    e1 = (e1_unnormalized[0] - c * e0[0],
+          e1_unnormalized[1] - c * e0[1],
+          e1_unnormalized[2] - c * e0[2])
+    e1 = vecs_robust_normalize_np(e1)
+
+    # Compute e2 as cross product of e0 and e1.
+    e2 = vecs_cross_vecs_np(e0, e1)
+
+    rots = (e0[0], e1[0], e2[0], e0[1], e1[1], e2[1], e0[2], e1[2], e2[2])
+    return rots
+
+
+def vecs_sub_np(v1, v2):
+    """Computes v1 - v2."""
+    return (v1[0] - v2[0], v1[1] - v2[1], v1[2] - v2[2])
+
+
+def rigids_from_3_points_np(
+        point_on_neg_x_axis,
+        origin,
+        point_on_xy_plane,
+    ):
+    """construct rigids from inputs 3 point"""
+
+    m = rots_from_two_vecs_np(
+        e0_unnormalized=vecs_sub_np(origin, point_on_neg_x_axis),
+        e1_unnormalized=vecs_sub_np(point_on_xy_plane, origin))
+    return m, origin
+
+
+def rigids_mul_rots_np(x, y):
+    """numpy version of getting results rigids x multiply rots y"""
+    rigids = (rots_mul_rots_np(x[0], y), x[1])
+    return rigids
+
+
+def vecs_add_np(v1, v2):
+    """get result of vecs1 add vecs2"""
+    return (v1[0] + v2[0], v1[1] + v2[1], v1[2] + v2[2])
+
+
+def rigids_mul_vecs_np(x, y):
+    """numpy version of getting results rigids x multiply vecs y"""
+    vecs_res = vecs_add_np(rots_mul_vecs_np(x[0], y), x[1])
+    return vecs_res
+
+
+def rigids_to_tensor_flat12_np(inputs):  # outputs shape (..., 12)
+    """transfer rigids to flat tensor"""
+    return np.stack(list(inputs[0]) + list(inputs[1]), axis=-1)
+
+
+def rots_from_tensor3x3_np(inputs):
+    """get rotation from inputs tensor"""
+    assert inputs.shape[-1] == 3
+    assert inputs.shape[-2] == 3
+    out = (inputs[..., 0, 0], inputs[..., 0, 1], inputs[..., 0, 2],
+           inputs[..., 1, 0], inputs[..., 1, 1], inputs[..., 1, 2],
+           inputs[..., 2, 0], inputs[..., 2, 1], inputs[..., 2, 2])
+    return out
+
+
+def rots_mul_rots_np(x, y):
+    """numpy version of getting result of rots x multiply rots y"""
+    vecs0 = rots_mul_vecs_np(x, (y[0], y[3], y[6]))
+    vecs1 = rots_mul_vecs_np(x, (y[1], y[4], y[7]))
+    vecs2 = rots_mul_vecs_np(x, (y[2], y[5], y[8]))
+    out = (vecs0[0], vecs1[0], vecs2[0], vecs0[1], vecs1[1], vecs2[1], vecs0[2], vecs1[2], vecs2[2])
+    return out
+
+
+def rots_mul_vecs_np(x, y):
+    """numpy version of getting result of rots x multiply vecs y"""
+    return (x[0] * y[0] + x[1] * y[1] + x[2] * y[2],
+            x[3] * y[0] + x[4] * y[1] + x[5] * y[2],
+            x[6] * y[0] + x[7] * y[1] + x[8] * y[2])
+
+
+def vecs_from_tensor_np(inputs):
+    """get vectors from input tensor"""
+    num_components = inputs.shape[-1]
+    assert num_components == 3
+    return (inputs[..., 0], inputs[..., 1], inputs[..., 2])
