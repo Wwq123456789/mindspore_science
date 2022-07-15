@@ -20,11 +20,11 @@ from mindspore.common.tensor import Tensor
 from mindspore.ops import functional as F
 from mindspore.ops import operations as P
 from mindspore import Parameter
-from mindsponge.core.layer.initializer import lecun_init
-from mindsponge.common.utils import dgram_from_positions, batch_make_transform_from_reference, batch_quat_affine, \
-    batch_invert_point, batch_rot_to_quat
+from mindsponge.cell.initializer import lecun_init
+from mindsponge.common.utils import dgram_from_positions
+from mindsponge.common.geometry import make_transform_from_reference, rot_to_quat, quat_affine, invert_point
 from mindsponge.common.residue_constants import atom_order
-from mindsponge.core.layer import Attention, TriangleAttention, Transition, TriangleMultiplication
+from mindsponge.cell import Attention, TriangleAttention, Transition, TriangleMultiplication
 
 
 class TemplatePairStack(nn.Cell):
@@ -130,7 +130,6 @@ class SingleTemplateEmbedding(nn.Cell):
         num_res = template_aatype[0, ...].shape[0]
         template_mask_2d_temp = P.ExpandDims()(template_pseudo_beta_mask, -1) * \
                                 P.ExpandDims()(template_pseudo_beta_mask, 1)
-
         template_dgram_temp = dgram_from_positions(template_pseudo_beta, self.num_bins, self.min_bin, self.max_bin)
 
         template_dgram_temp = P.Cast()(template_dgram_temp, self._type)
@@ -140,43 +139,49 @@ class SingleTemplateEmbedding(nn.Cell):
         aatype_temp = P.Cast()(aatype_temp, self._type)
         to_concat_temp = to_concat_temp + (P.Tile()(P.ExpandDims()(aatype_temp, 1), (1, num_res, 1, 1)),
                                            P.Tile()(P.ExpandDims()(aatype_temp, 2), (1, 1, num_res, 1)))
-        rot_temp, trans_temp = batch_make_transform_from_reference(template_all_atom_positions[:, :, self.n],
-                                                                   template_all_atom_positions[:, :, self.ca],
-                                                                   template_all_atom_positions[:, :, self.c])
 
-        _, rotation_tmp, translation_tmp = batch_quat_affine(
-            batch_rot_to_quat(rot_temp, unstack_inputs=True), translation=trans_temp, rotation=rot_temp,
-            unstack_inputs=True)
-        points_tmp = P.ExpandDims()(translation_tmp, -2)
-        affine_vec_tmp = batch_invert_point(points_tmp, rotation_tmp, translation_tmp, extra_dims=1)
-        affine_vec_tmp = P.Cast()(affine_vec_tmp, self._type)
-        inv_distance_scalar_tmp = P.Rsqrt()(1e-6 + P.ReduceSum()(P.Square()(affine_vec_tmp), 1))
+        rot_temp, trans_temp = make_transform_from_reference(template_all_atom_positions[:, :, self.n],
+                                                             template_all_atom_positions[:, :, self.ca],
+                                                             template_all_atom_positions[:, :, self.c])
+
+        _, rotation_tmp, translation_tmp = quat_affine(rot_to_quat(rot_temp), trans_temp, rot_temp)
+        points_tmp = [P.ExpandDims()(translation_tmp[0], -2),
+                      P.ExpandDims()(translation_tmp[1], -2),
+                      P.ExpandDims()(translation_tmp[2], -2)]
+        affine_vec_tmp = invert_point(points_tmp, rotation_tmp, translation_tmp, extra_dims=1)
+        inv_distance_scalar_tmp = P.Rsqrt()(1e-6 + P.Square()(affine_vec_tmp[0]) + P.Square()(affine_vec_tmp[1]) + \
+                                            P.Square()(affine_vec_tmp[2]))
         template_mask_tmp = (template_all_atom_masks[:, :, self.n] *
                              template_all_atom_masks[:, :, self.ca] *
                              template_all_atom_masks[:, :, self.c])
         template_mask_2d_tmp = P.ExpandDims()(template_mask_tmp, -1) * P.ExpandDims()(template_mask_tmp, 1)
 
         inv_distance_scalar_tmp = inv_distance_scalar_tmp * template_mask_2d_tmp
-
-        unit_vector_tmp = P.Transpose()((affine_vec_tmp * P.ExpandDims()(inv_distance_scalar_tmp, 1)), (0, 2, 3, 1))
+        unit_vector_tmp = (P.ExpandDims()(inv_distance_scalar_tmp * affine_vec_tmp[0], -1),
+                           P.ExpandDims()(inv_distance_scalar_tmp * affine_vec_tmp[1], -1),
+                           P.ExpandDims()(inv_distance_scalar_tmp * affine_vec_tmp[2], -1))
 
         if not self.use_template_unit_vector:
-            unit_vector_tmp = P.ZerosLike()(unit_vector_tmp)
-        to_concat_temp = to_concat_temp + (unit_vector_tmp, P.ExpandDims()(template_mask_2d_tmp, -1),)
+            unit_vector_tmp = (P.ZerosLike()(unit_vector_tmp[0]), P.ZerosLike()(unit_vector_tmp[1]),
+                               P.ZerosLike()(unit_vector_tmp[2]))
+        to_concat_temp = to_concat_temp + unit_vector_tmp + (P.ExpandDims()(template_mask_2d_tmp, -1),)
         act_tmp = P.Concat(-1)(to_concat_temp)
+
         act_tmp = act_tmp * P.ExpandDims()(template_mask_2d_tmp, -1)
         act_tmp = self.embedding2d(act_tmp)
 
-        # # if self.training:
+        act_tmp = P.Split(0, self.batch_block)(act_tmp)
+        act = ()
+        for i in range(self.batch_block):
+            act = act + (P.Squeeze()(act_tmp[i]),)
+
         output = []
-        idx_batch_loop = self.zeros
-        for _ in range(self.batch_block):
-            act_bacth = P.Gather()(act_tmp, idx_batch_loop, 0)
+        for i in range(self.batch_block):
+            act_bacth = act[i]
             for j in range(self.num_block):
                 act_bacth = self.template_pair_stack[j](act_bacth, mask_2d)
             slice_act = P.Reshape()(act_bacth, ((1,) + P.Shape()(act_bacth)))
             output.append(slice_act)
-            idx_batch_loop = F.depend(idx_batch_loop + 1, output[-1])
 
         act_tmp_loop = P.Concat()(output)
         act_tmp = self.output_layer_norm(act_tmp_loop)
@@ -228,28 +233,6 @@ class TemplateEmbedding(nn.Cell):
             (num_res * num_res, num_templates, num_channels))
         template_mask_bias = P.ExpandDims()(P.ExpandDims()(P.ExpandDims()(template_mask, 0), 1), 2) - 1.0
         bias = 1e4 * template_mask_bias
-        if self.slice_num:
-            slice_shape = (self.slice_num, -1)
-            flat_query_shape = P.Shape()(flat_query)
-            flat_query = P.Reshape()(flat_query, slice_shape + flat_query_shape[1:])
-            flat_templates_shape = P.Shape()(flat_templates)
-            flat_templates = P.Reshape()(flat_templates, slice_shape + flat_templates_shape[1:])
-            slice_idx = 0
-            embedding_tuple = ()
-            while slice_idx < self.slice_num:
-                self._flat_query_slice = flat_query[slice_idx]
-                self._flat_templates_slice = flat_templates[slice_idx]
-                embedding_slice = self.template_pointwise_attention(self._flat_query_slice, self._flat_templates_slice,
-                                                                    bias, index=None, nonbatched_bias=None)
-                embedding_slice = P.Reshape()(embedding_slice, ((1,) + P.Shape()(embedding_slice)))
-                embedding_tuple = embedding_tuple + (embedding_slice,)
-                slice_idx += 1
-            embedding = P.Concat()(embedding_tuple)
-
-            embedding = P.Reshape()(embedding, (num_res, num_res, query_num_channels))
-            # No gradients if no templates.
-            embedding = embedding * (P.ReduceSum()(template_mask) > 0.)
-            return embedding
 
         embedding = self.template_pointwise_attention(flat_query, flat_templates, bias, index=None,
                                                       nonbatched_bias=None)

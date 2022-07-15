@@ -51,7 +51,7 @@ def pseudo_beta_fn(aatype, all_atom_positions, all_atom_masks):
     ca_idx = residue_constants.atom_order['CA']
     cb_idx = residue_constants.atom_order['CB']
     pseudo_beta = mnp.where(
-        mnp.tile(is_gly[..., None].astype("int32"), [1,] * len(is_gly.shape) + [3,]).astype("bool"),
+        mnp.tile(is_gly[..., None], [1,] * len(is_gly.shape) + [3,]),
         all_atom_positions[..., ca_idx, :],
         all_atom_positions[..., cb_idx, :])
     if all_atom_masks is not None:
@@ -315,7 +315,7 @@ def _invert_point(transformed_point, rotation, translation):
     return result
 
 
-def mask_mean(mask, value, axis=None, drop_mask_channel=False, eps=1e-10):
+def mask_mean(mask, value, axis=0, drop_mask_channel=False, eps=1e-10):
     """Masked mean."""
     if drop_mask_channel:
         mask = mask[..., 0]

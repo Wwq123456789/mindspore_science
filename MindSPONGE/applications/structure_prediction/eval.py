@@ -19,7 +19,7 @@ import mindspore.context as context
 from mindspore import Tensor, Model, nn
 from mindsponge.common.config_load import load_config
 from data import Feature
-from model import MFold
+from model import MegaFold
 
 parser = argparse.ArgumentParser(description='Inputs for eval.py')
 parser.add_argument('--data_config', help='data process config')
@@ -63,15 +63,15 @@ if __name__ == "__main__":
     processed_feature = Feature(data_cfg, raw_feature)
     feat, prev_pos, prev_msa_first_row, prev_pair = processed_feature.pipeline(data_cfg,
                                                                                mixed_precision=args.mixed_precision)
-    structure_prediction = MFold(model_cfg, mixed_precision=args.mixed_precision)
+    structure_prediction = MegaFold(model_cfg, mixed_precision=args.mixed_precision)
     opt = nn.Adam(params=structure_prediction.trainable_params(), learning_rate=1e-4, eps=1e-6)
     if args.mixed_precision:
         AMP_LEVEL = 'O3'
     else:
         AMP_LEVEL = 'O0'
-    mfold = Model(structure_prediction, optimizer=opt, amp_level=AMP_LEVEL)
+    megafold = Model(structure_prediction, optimizer=opt, amp_level=AMP_LEVEL)
     for i in range(1):
         feat_i = [Tensor(x[i]) for x in feat]
-        result = mfold.predict(*feat_i, prev_pos, prev_msa_first_row, prev_pair)
+        result = megafold.predict(*feat_i, prev_pos, prev_msa_first_row, prev_pair)
         for val in result:
             print(val.shape, val.dtype)
