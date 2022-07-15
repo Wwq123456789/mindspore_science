@@ -72,6 +72,7 @@
 "mindscience/MindSPONGE/mindsponge/python/core/space/space.py"                              "invalid-name"
 "mindscience/MindSPONGE/mindsponge/python/core/space/space.py"                              "unidiomatic-typecheck"
 "mindscience/MindSPONGE/mindsponge/python/core/space/system.py"                             "invalid-name"
-"mindscience/MindSPONGE/mindsponge/python/data/pdb_parser.py"                               "invalid-name"
+"mindscience/MindSPONGE/mindsponge/python/data/parsers.py"                                  "invalid-name"
 "mindscience/MindSPONGE/mindsponge/python/core/control/integrator/brownian.py"              "unexpected-keyword-arg"
-"mindscience/MindSPONGE/mindsponge/python/data/pdb_parser.py"                               "unused-import"  
+"mindscience/MindSPONGE/mindsponge/python/data/parsers.py"                                  "unused-import"
+
