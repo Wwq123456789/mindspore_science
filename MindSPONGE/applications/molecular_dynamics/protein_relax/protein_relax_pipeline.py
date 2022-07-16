@@ -26,16 +26,16 @@ from mindspore import ops
 from mindspore.common import Tensor
 from mindsponge.common.callback import RunInfo
 from mindsponge.common.units import set_global_units
-from mindsponge.core.loss import get_violation_loss
-from mindsponge.core.partition.neighbourlist import NeighbourList
-from mindsponge.core.potential.energy import (AngleEnergy, BondEnergy,
-                                              DihedralEnergy, NB14Energy,
-                                              NonBondEnergy)
-from mindsponge.core.potential.forcefield import ClassicalFF, Oscillator
-from mindsponge.core.simulation import SimulationCell
-from mindsponge.core.simulation.onestep import ClippedRunOneStepCell
-from mindsponge.core.simulation.sponge import Sponge
-from mindsponge.core.space.system import SystemCell
+from mindsponge.loss import get_violation_loss
+from mindsponge.partition.neighbourlist import NeighbourList
+from mindsponge.potential.energy import (AngleEnergy, BondEnergy,
+                                         DihedralEnergy, NB14Energy,
+                                         NonBondEnergy)
+from mindsponge.potential.forcefield import ClassicalFF, Oscillator
+from mindsponge.simulation import SimulationCell
+from mindsponge.simulation.onestep import ClippedRunOneStepCell
+from mindsponge.simulation.sponge import Sponge
+from mindsponge.space.system import SystemCell
 from mindsponge.data.hyperparam import ReconstructProtein as Protein
 from mindsponge.data.pdb_generator import gen_pdb
 from mindsponge.data.parsers import read_pdb_via_xponge as read_pdb

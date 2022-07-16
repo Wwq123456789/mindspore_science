@@ -20,9 +20,9 @@ import mindspore.numpy as mnp
 import mindspore.ops as ops
 from mindspore import Tensor
 from mindspore.ops import functional as F
-from mindsponge.core.layer import InvariantPointAttention
+from mindsponge.cell import InvariantPointAttention
 import mindsponge.common.residue_constants as residue_constants
-from mindsponge.core.layer.initializer import lecun_init
+from mindsponge.cell.initializer import lecun_init
 from mindsponge.common.utils import torsion_angles_to_frames, frames_and_literature_positions_to_atom14_pos, \
     pre_compose, scale_translation, to_tensor_new, generate_new_affine, to_tensor, from_tensor, vecs_to_tensor, \
     atom14_to_atom37, get_exp_frames, get_exp_atom_pos

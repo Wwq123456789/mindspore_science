@@ -96,17 +96,17 @@ build_mindsponge()
     echo "build ascend backend"
     export SPONGE_PACKAGE_NAME=mindscience_sponge_ascend
     CMAKE_FLAG="-DENABLE_D=ON"
-    cp -r "${BASEPATH}/build/mindsponge/core/ops/cpu/." "${BASEPATH}/build/mindsponge/core/ops"
-    rm -rf "${BASEPATH}/build/mindsponge/core/ops/cpu"
-    rm -rf "${BASEPATH}/build/mindsponge/core/ops/gpu"
+    cp -r "${BASEPATH}/build/mindsponge/ops/cpu/." "${BASEPATH}/build/mindsponge/ops"
+    rm -rf "${BASEPATH}/build/mindsponge/ops/cpu"
+    rm -rf "${BASEPATH}/build/mindsponge/ops/gpu"
   fi
   if [[ "X$ENABLE_GPU" == "Xon" ]]; then
     echo "build gpu backend"
     export SPONGE_PACKAGE_NAME=mindscience_sponge_gpu
     CMAKE_FLAG="-DENABLE_GPU=ON"
-    cp -r "${BASEPATH}/build/mindsponge/core/ops/gpu/." "${BASEPATH}/build/mindsponge/core/ops"
-    rm -rf "${BASEPATH}/build/mindsponge/core/ops/cpu"
-    rm -rf "${BASEPATH}/build/mindsponge/core/ops/gpu"
+    cp -r "${BASEPATH}/build/mindsponge/ops/gpu/." "${BASEPATH}/build/mindsponge/ops"
+    rm -rf "${BASEPATH}/build/mindsponge/ops/cpu"
+    rm -rf "${BASEPATH}/build/mindsponge/ops/gpu"
   fi
   cmake .. ${CMAKE_FLAG}
   make

@@ -17,12 +17,12 @@ import numpy as np
 import mindspore.common.dtype as mstype
 import mindspore.nn as nn
 import mindspore.numpy as mnp
-from mindspore.common.tensor import Tensor
 from mindspore.ops import operations as P
+from mindspore.common.tensor import Tensor
 from mindspore import Parameter
-from mindsponge.common.utils import pseudo_beta_fn, dgram_from_positions, atom37_to_torsion_angles, get_chi_atom_indices
-from mindsponge.core.layer.initializer import lecun_init
 import mindsponge.common.residue_constants as residue_constants
+from mindsponge.common.utils import pseudo_beta_fn, atom37_to_torsion_angles, get_chi_atom_indices
+from mindsponge.cell.initializer import lecun_init
 from template_embedding import TemplateEmbedding
 from evoformer import Evoformer
 from structure import StructureModule
@@ -52,11 +52,41 @@ def caculate_constant_array(seq_length):
     return constant_array
 
 
-class MFold(nn.Cell):
-    """Mfold"""
+def caculate_bounds(num_bins, min_bin, max_bin):
+    lower_breaks = np.linspace(min_bin, max_bin, num_bins)
+    lower_breaks = np.square(lower_breaks)
+    upper_breaks = np.concatenate([lower_breaks[1:], np.array([1e8], dtype=np.float32)], axis=-1)
+    return lower_breaks, upper_breaks
+
+
+def dgram_from_positions_bak(positions, lower, upper):
+    """Compute distogram from amino acid positions.
+
+    Arguments:
+    positions: [N_res, 3] Position coordinates.
+    num_bins: The number of bins in the distogram.
+    min_bin: The left edge of the first bin.
+    max_bin: The left edge of the final bin. The final bin catches
+    everything larger than `max_bin`.
+
+    Returns:
+    Distogram with the specified number of bins.
+    """
+
+    def squared_difference(x, y):
+        return mnp.square(x - y)
+
+    dist2 = mnp.sum(squared_difference(mnp.expand_dims(positions, axis=-2),
+                                       mnp.expand_dims(positions, axis=-3)), axis=-1, keepdims=True)
+    dgram = mnp.logical_and((dist2 > lower), (dist2 < upper))
+    return dgram
+
+
+class MegaFold(nn.Cell):
+    """MegaFold"""
 
     def __init__(self, config, mixed_precision=True):
-        super(MFold, self).__init__()
+        super(MegaFold, self).__init__()
 
         self.cfg = config
 
@@ -144,6 +174,9 @@ class MFold(nn.Cell):
                                                 self.cfg.seq_channel,
                                                 self.cfg.pair_channel,
                                                 mixed_precision)
+        lower_breaks, upper_breaks = caculate_bounds(self.num_bins, self.min_bin, self.max_bin)
+        self.lower_breaks = Tensor(lower_breaks, self._type)
+        self.upper_breaks = Tensor(upper_breaks, self._type)
 
     def construct(self, target_feat, msa_feat, msa_mask, seq_mask, aatype,
                   template_aatype, template_all_atom_masks, template_all_atom_positions,
@@ -162,7 +195,7 @@ class MFold(nn.Cell):
         mask_2d = P.ExpandDims()(seq_mask, 1) * P.ExpandDims()(seq_mask, 0)
         if self.recycle_pos:
             prev_pseudo_beta = pseudo_beta_fn(aatype, prev_pos, None)
-            dgram = dgram_from_positions(prev_pseudo_beta, self.num_bins, self.min_bin, self.max_bin)
+            dgram = dgram_from_positions_bak(prev_pseudo_beta, self.lower_breaks, self.upper_breaks).astype(self._type)
             pair_activations += self.prev_pos_linear(dgram)
 
         if self.recycle_features:
@@ -232,7 +265,7 @@ class MFold(nn.Cell):
         msa = msa_activations[:num_sequences, :, :]
         msa_first_row = msa_activations[0]
 
-        final_atom_positions, final_atom_mask, rp_structure_module, atom14_pred_positions, final_affines, \
+        final_atom_positions, _, rp_structure_module, atom14_pred_positions, final_affines, \
         angles_sin_cos_new, um_angles_sin_cos_new, sidechain_frames, sidechain_atom_pos, structure_traj = \
             self.structure_module(single_activations,
                                   pair_activations,
@@ -240,10 +273,8 @@ class MFold(nn.Cell):
                                   aatype,
                                   residx_atom37_to_atom14,
                                   atom37_atom_exists)
+        final_atom_positions = P.Cast()(final_atom_positions, self._type)
         prev_pos = final_atom_positions
         prev_msa_first_row = msa_first_row
         prev_pair = pair_activations
-        res = (final_atom_positions, final_atom_mask, prev_pos, prev_msa_first_row, prev_pair, \
-               msa, rp_structure_module, atom14_pred_positions, final_affines, angles_sin_cos_new, \
-               um_angles_sin_cos_new, sidechain_frames, sidechain_atom_pos, structure_traj)
-        return res
+        return prev_pos, prev_msa_first_row, prev_pair
