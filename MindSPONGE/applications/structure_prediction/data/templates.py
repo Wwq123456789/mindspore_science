@@ -22,9 +22,9 @@ from typing import Any, Mapping, Optional, Sequence, Tuple
 from absl import logging
 import numpy as np
 
-from MindSPONGE.mindsponge.python.data.parsers import parse_mmcif, parse_a3m
-from MindSPONGE.applications.structure_prediction.data.kalign import Kalign
-from MindSPONGE.mindsponge.python.common import residue_constants
+from mindsponge.data.parsers import parse_mmcif, parse_a3m
+from mindsponge.common import residue_constants
+from data.kalign import Kalign
 
 
 class Error(Exception):
@@ -129,7 +129,6 @@ def _is_after_cutoff(
         raise ValueError('The release_date_cutoff must not be None.')
     if pdb_id in release_dates:
         return release_dates[pdb_id] > release_date_cutoff
-    logging.warning('Template structure not in release dates dict: %s', pdb_id)
     return False
 
 
