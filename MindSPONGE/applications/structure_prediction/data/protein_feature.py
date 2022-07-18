@@ -21,11 +21,10 @@ import os
 import stat
 import numpy as np
 
-
-from MindSPONGE.applications.structure_prediction.data.templates import TemplateHitFeaturizer
-from MindSPONGE.applications.structure_prediction.data.hhsearch import HHSearch
-from MindSPONGE.mindsponge.python.data.parsers import parse_fasta, parse_hhr, parse_a3m
-from MindSPONGE.mindsponge.python.common import residue_constants
+from mindsponge.data.parsers import parse_fasta, parse_hhr, parse_a3m
+from mindsponge.common import residue_constants
+from data.templates import TemplateHitFeaturizer
+from data.hhsearch import HHSearch
 
 
 def make_msa_features(msas, deletion_matrices):
@@ -126,7 +125,8 @@ class RawFeatureGenerator:
         msa_features = make_msa_features(msas=(msas,), deletion_matrices=(deletion_matrices,))
 
         feature_dict = {**sequence_features, **msa_features, **templates_result.features}
+        os.makedirs(raw_feature_path, exist_ok=True)
         pkl_path = os.path.join(raw_feature_path, fasta_path.split(".fasta")[0]+'.pkl')
-        with os.fdopen(os.open(pkl_path, os.O_CREAT, stat.S_IWUSR), 'wb') as f:
+        with os.fdopen(os.open(pkl_path, os.O_RDWR|os.O_CREAT, stat.S_IRWXU), 'wb') as f:
             pickle.dump(feature_dict, f, protocol=4)
         return feature_dict

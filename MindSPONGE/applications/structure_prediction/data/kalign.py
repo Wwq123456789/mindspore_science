@@ -22,7 +22,7 @@ import subprocess
 
 from absl import logging
 
-from MindSPONGE.mindsponge.python.data.utils import tmpdir_manager, timing, to_a3m
+from mindsponge.data.utils import tmpdir_manager, timing, to_a3m
 
 
 class Kalign:
@@ -63,7 +63,7 @@ class Kalign:
             input_fasta_path = os.path.join(query_tmp_dir, 'input.fasta')
             output_a3m_path = os.path.join(query_tmp_dir, 'output.a3m')
 
-            with os.fdopen(os.open(input_fasta_path, os.O_CREAT, stat.S_IWUSR), 'w') as f:
+            with os.fdopen(os.open(input_fasta_path, os.O_RDWR|os.O_CREAT, stat.S_IRWXU), 'w') as f:
                 f.write(to_a3m(sequences))
 
             cmd = [self.binary_path, '-i', input_fasta_path, '-o', output_a3m_path, '-format', 'fasta',]

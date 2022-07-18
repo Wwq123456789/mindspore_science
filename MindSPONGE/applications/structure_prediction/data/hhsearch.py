@@ -23,7 +23,7 @@ import subprocess
 
 from absl import logging
 
-from MindSPONGE.mindsponge.python.data.utils import tmpdir_manager, timing
+from mindsponge.data.utils import tmpdir_manager, timing
 
 
 class HHSearch:
@@ -61,7 +61,7 @@ class HHSearch:
         with tmpdir_manager(base_dir='/tmp') as query_tmp_dir:
             input_path = os.path.join(query_tmp_dir, 'query.a3m')
             hhr_path = os.path.join(query_tmp_dir, 'output.hhr')
-            with os.fdopen(os.open(input_path, os.O_CREAT, stat.S_IWUSR), 'w') as f:
+            with os.fdopen(os.open(input_path, os.O_RDWR|os.O_CREAT, stat.S_IRWXU), 'w') as f:
                 f.write(a3m)
 
             db_cmd = []
