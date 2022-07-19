@@ -21,7 +21,7 @@ from mindspore.train._utils import _make_directory
 from mindspore.train.callback import Callback, RunContext
 
 from ..units import Units, global_units
-from ...core.space.system import SystemCell
+from ...space.system import SystemCell
 from ..elements import vmd_radius
 
 _cur_dir = os.getcwd()

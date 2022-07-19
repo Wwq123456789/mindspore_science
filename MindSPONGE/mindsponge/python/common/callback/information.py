@@ -15,7 +15,7 @@
 """information"""
 
 from mindspore.train.callback import Callback, RunContext
-from ...core.space.system import SystemCell
+from ...space.system import SystemCell
 
 
 class RunInfo(Callback):

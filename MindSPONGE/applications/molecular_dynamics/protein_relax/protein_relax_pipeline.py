@@ -17,28 +17,28 @@ import argparse
 import os
 import time
 import warnings
-import numpy as np
 
+import numpy as np
 import mindspore as ms
-from mindspore import context, nn
+from mindspore import context, nn, ops
 from mindspore import numpy as mnp
-from mindspore import ops
 from mindspore.common import Tensor
+from mindsponge.common import residue_constants
 from mindsponge.common.callback import RunInfo
 from mindsponge.common.units import set_global_units
-from mindsponge.loss import get_violation_loss
+from mindsponge.common.utils import get_pdb_info
+from mindsponge.data.hyperparam import ReconstructProtein as Protein
+from mindsponge.data.parsers import read_pdb_via_xponge as read_pdb
+from mindsponge.data.pdb_generator import gen_pdb
+from mindsponge.metrics import get_structural_violations
 from mindsponge.partition.neighbourlist import NeighbourList
-from mindsponge.potential.energy import (AngleEnergy, BondEnergy,
-                                         DihedralEnergy, NB14Energy,
-                                         NonBondEnergy)
+from mindsponge.potential.energy import AngleEnergy, BondEnergy, DihedralEnergy, NB14Energy, NonBondEnergy
 from mindsponge.potential.forcefield import ClassicalFF, Oscillator
 from mindsponge.simulation import SimulationCell
 from mindsponge.simulation.onestep import ClippedRunOneStepCell
 from mindsponge.simulation.sponge import Sponge
 from mindsponge.space.system import SystemCell
-from mindsponge.data.hyperparam import ReconstructProtein as Protein
-from mindsponge.data.pdb_generator import gen_pdb
-from mindsponge.data.parsers import read_pdb_via_xponge as read_pdb
+
 
 os.environ['GLOG_v'] = '3'
 warnings.filterwarnings("ignore")
@@ -52,6 +52,23 @@ args = parser.parse_args()
 pdb_name = args.i
 save_pdb_name = args.o
 addh = args.addh
+
+VIOLATION_TOLERANCE_ACTOR = 12.0
+CLASH_OVERLAP_TOLERANCE = 1.5
+C_ONE_HOT = nn.OneHot(depth=14)(Tensor(2, ms.int32))
+N_ONE_HOT = nn.OneHot(depth=14)(Tensor(0, ms.int32))
+DISTS_MASK_I = mnp.eye(14, 14)
+CYS_SG_IDX = Tensor(5, ms.int32)
+ATOMTYPE_RADIUS = Tensor(np.array(
+    [1.55, 1.7, 1.7, 1.7, 1.52, 1.7, 1.7, 1.7, 1.52, 1.52, 1.8, 1.7, 1.7, 1.7, 1.55, 1.55,
+     1.52, 1.52, 1.8, 1.7, 1.7, 1.7, 1.7, 1.55, 1.55, 1.55, 1.52, 1.52, 1.7, 1.55, 1.55,
+     1.52, 1.7, 1.7, 1.7, 1.55, 1.52]), ms.float32)
+LOWER_BOUND, UPPER_BOUND, RESTYPE_ATOM14_BOUND_STDDEV = \
+    residue_constants.make_atom14_dists_bounds(overlap_tolerance=1.5, bond_length_tolerance_factor=12.0)
+LOWER_BOUND = Tensor(LOWER_BOUND, ms.float32)
+UPPER_BOUND = Tensor(UPPER_BOUND, ms.float32)
+RESTYPE_ATOM14_BOUND_STDDEV = Tensor(RESTYPE_ATOM14_BOUND_STDDEV, ms.float32)
+
 
 ms.set_seed(2333)
 _, res_names, _, _, res_pointer, flatten_atoms, flatten_crds, init_res_names, init_res_ids, \
@@ -151,7 +168,7 @@ def relax_hydrogens(system, nblist, energy_terms, steps=100, grad_clip=1.0, clip
     neighbour_list = nblist
     simulation_network = SimulationCell(system, energy, neighbour_list=neighbour_list)
     total_steps = steps
-    warmup_steps = int(warmup_fraction*steps)
+    warmup_steps = int(warmup_fraction * steps)
     lr = get_cosine_lr(lr_init, lr_max, total_steps, warmup_steps)
     opt = nn.SGD(params=system.trainable_params(), learning_rate=Tensor(lr), momentum=0.0, dampening=0.0,
                  weight_decay=0.0, nesterov=False)
@@ -174,7 +191,7 @@ def relax_hydrogens(system, nblist, energy_terms, steps=100, grad_clip=1.0, clip
 
     if mnp.isnan(md.energy().sum()):
         return 0, None
-    return system, md.energy().sum()/num_atoms
+    return system, md.energy().sum() / num_atoms
 
 
 def relax_violation(system, nblist, energy_terms, steps=100, grad_clip=1.0, clip_by_value=True,
@@ -226,11 +243,6 @@ def main(loops, steps, clip_by_value, grad_clip, warmup_fraction, lr_init, lr_ma
     num_walkers = 1
     vio_loops = loops
 
-    violation_loss, residue_violations_mask = get_violation_loss(atom14_atom_exists=atom14_atom_exists,
-                                                                 residue_index=residue_index,
-                                                                 residx_atom14_to_atom37=residx_atom14_to_atom37,
-                                                                 atom14_positions=atom14_positions, aatype=aatype)
-
     system = SystemCell(num_walkers=num_walkers, num_atoms=num_atoms, atomic_number=atomic_number, atom_name=atom_name,
                         atom_type=atom_type, resname=resname, resid=init_resid - 1, bond_index=bond_index, mass=mass,
                         coordinates=coordinates, charge=charge)
@@ -257,10 +269,26 @@ def main(loops, steps, clip_by_value, grad_clip, warmup_fraction, lr_init, lr_ma
                                             warmup_fraction=warmup_fraction[0], lr_init=lr_init[0], lr_max=lr_max[0])
     try:
         gen_pdb(system.coordinates.asnumpy(), atom_name, init_resname, init_resid, pdb_name=save_pdb_name)
-        violation_loss, residue_violations_mask = get_violation_loss(save_pdb_name)
-        print(f"The violation loss value is: {violation_loss}")
+        features = get_pdb_info(save_pdb_name)
+        atom14_atom_exists_t = Tensor(features.get("atom14_gt_exists")).astype(ms.float32)
+        residue_index_t = Tensor(features.get("residue_index")).astype(ms.float32)
+        residx_atom14_to_atom37_t = Tensor(features.get("residx_atom14_to_atom37")).astype(ms.int32)
+        atom14_positions_t = Tensor(features.get("atom14_gt_positions")).astype(ms.float32)
+        aatype_t = Tensor(features.get("aatype")).astype(ms.int32)
+        violations = get_structural_violations(atom14_atom_exists_t, residue_index_t, aatype_t,
+                                               residx_atom14_to_atom37_t, atom14_positions_t,
+                                               VIOLATION_TOLERANCE_ACTOR, CLASH_OVERLAP_TOLERANCE,
+                                               LOWER_BOUND, UPPER_BOUND, ATOMTYPE_RADIUS, C_ONE_HOT, N_ONE_HOT,
+                                               DISTS_MASK_I, CYS_SG_IDX)
     except AttributeError:
-        pass
+        violations = get_structural_violations(atom14_atom_exists, residue_index, aatype, residx_atom14_to_atom37,
+                                               atom14_positions, VIOLATION_TOLERANCE_ACTOR, CLASH_OVERLAP_TOLERANCE,
+                                               LOWER_BOUND, UPPER_BOUND, ATOMTYPE_RADIUS, C_ONE_HOT, N_ONE_HOT,
+                                               DISTS_MASK_I, CYS_SG_IDX)
+
+    violation_loss = violations[-1]
+    residue_violations_mask = violations[-2]
+    print(f"The violation loss value is: {violation_loss}")
 
     violation_atom_mask = mnp.matmul(init_resid_onehot, mnp.expand_dims(residue_violations_mask, -1))
 
@@ -292,7 +320,18 @@ def main(loops, steps, clip_by_value, grad_clip, warmup_fraction, lr_init, lr_ma
         atomic_energy = atomic_energy.asnumpy()
         try:
             gen_pdb(system.coordinates.asnumpy(), atom_name, init_resname, init_resid, pdb_name=save_pdb_name)
-            violation_loss, residue_violations_mask = get_violation_loss(save_pdb_name)
+            features = get_pdb_info(save_pdb_name)
+            atom14_atom_exists_t = Tensor(features.get("atom14_gt_exists")).astype(ms.float32)
+            residue_index_t = Tensor(features.get("residue_index")).astype(ms.float32)
+            residx_atom14_to_atom37_t = Tensor(features.get("residx_atom14_to_atom37")).astype(ms.int32)
+            atom14_positions_t = Tensor(features.get("atom14_gt_positions")).astype(ms.float32)
+            aatype_t = Tensor(features.get("aatype")).astype(ms.int32)
+            violations = get_structural_violations(atom14_atom_exists_t, residue_index_t, aatype_t,
+                                                   residx_atom14_to_atom37_t, atom14_positions_t,
+                                                   VIOLATION_TOLERANCE_ACTOR, CLASH_OVERLAP_TOLERANCE,
+                                                   LOWER_BOUND, UPPER_BOUND, ATOMTYPE_RADIUS, C_ONE_HOT, N_ONE_HOT,
+                                                   DISTS_MASK_I, CYS_SG_IDX)
+            violation_loss = violations[-1]
             print(f"The violation loss value is: {violation_loss}; atomic energy is {atomic_energy}")
         except AttributeError:
             violation_loss = 0.
