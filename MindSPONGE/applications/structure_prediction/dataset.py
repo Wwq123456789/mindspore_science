@@ -129,7 +129,13 @@ class DatasetGenerator:
         label_features = {'aatype': aatype,
                           'all_atom_positions': atom37_positions,
                           'all_atom_mask': atom37_mask}
-        label_features = make_atom14_positions(label_features)
+
+        atom14_features = make_atom14_positions(aatype, atom37_mask, atom37_positions)
+        atom14_keys = ["atom14_atom_exists", "atom14_gt_exists", "atom14_gt_positions", "residx_atom14_to_atom37",
+                       "residx_atom37_to_atom14", "atom37_atom_exists", "atom14_alt_gt_positions",
+                       "atom14_alt_gt_exists", "atom14_atom_is_ambiguous"]
+        for index, array in enumerate(atom14_features):
+            label_features[atom14_keys[index]] = array
 
         # get ground truth of rigid groups
         rigidgroups_label_feature = atom37_to_frames(aatype, atom37_positions, atom37_mask, is_affine=True)
@@ -145,8 +151,8 @@ class DatasetGenerator:
         pseudo_beta, pseudo_beta_mask = pseudo_beta_fn(aatype, atom37_positions, atom37_mask)
         label_features["pseudo_beta"] = pseudo_beta
         label_features["pseudo_beta_mask"] = pseudo_beta_mask
-        label_features["chi_mask"] = label_features["torsion_angles_mask"][:, 3:]
-        label_features['torsion_angles_sin_cos'] = label_features['torsion_angles_sin_cos'][:, 3:, :]
+        label_features["chi_mask"] = label_features.get("torsion_angles_mask")[:, 3:]
+        label_features['torsion_angles_sin_cos'] = label_features.get('torsion_angles_sin_cos')[:, 3:, :]
         label_features['backbone_affine_mask'] = pseudo_beta_mask
         label_features.pop("aatype")
 
