@@ -191,8 +191,15 @@ def quat_affine(quaternion, translation, rotation=None, normalize=True, unstack_
     if unstack_inputs:
         if rotation is not None:
             rotation = P.Reshape()(rotation, P.Shape()(rotation)[:-2] + (9,))
-            rotation = C.Map()(squeeze, P.Split(-1, 9)(rotation))
-        translation = C.Map()(squeeze, P.Split(-1, 3)(translation))
+            rotation = P.Split(-1, 9)(rotation)
+            rotation = (P.Squeeze()(rotation[0]), P.Squeeze()(rotation[1]), P.Squeeze()(rotation[2]),
+                        P.Squeeze()(rotation[3]), P.Squeeze()(rotation[4]), P.Squeeze()(rotation[5]),
+                        P.Squeeze()(rotation[6]), P.Squeeze()(rotation[7]), P.Squeeze()(rotation[8]))
+        translation_x, translation_y, translation_z = P.Split(-1, 3)(translation)
+        translation_x = P.Squeeze()(translation_x)
+        translation_y = P.Squeeze()(translation_y)
+        translation_z = P.Squeeze()(translation_z)
+        translation = (translation_x, translation_y, translation_z)
     if normalize and quaternion is not None:
         quaternion = quaternion / mnp.norm(quaternion, axis=-1, keepdims=True)
     if rotation is None:
@@ -204,7 +211,10 @@ def quat_to_rot(normalized_quat):
     """Convert a normalized quaternion to a rotation matrix."""
     rot_tensor = mnp.sum(mnp.reshape(QUAT_TO_ROT, (4, 4, 9)) * normalized_quat[..., :, None, None] *
                          normalized_quat[..., None, :, None], axis=(-3, -2))
-    rot_tensor = C.Map()(squeeze, P.Split(-1, 9)(rot_tensor))
+    rot_tensor = P.Split(-1, 9)(rot_tensor)
+    rot_tensor = (P.Squeeze()(rot_tensor[0]), P.Squeeze()(rot_tensor[1]), P.Squeeze()(rot_tensor[2]),
+                  P.Squeeze()(rot_tensor[3]), P.Squeeze()(rot_tensor[4]), P.Squeeze()(rot_tensor[5]),
+                  P.Squeeze()(rot_tensor[6]), P.Squeeze()(rot_tensor[7]), P.Squeeze()(rot_tensor[8]))
     return rot_tensor
 
 
@@ -218,8 +228,15 @@ def invert_point(transformed_point, rotation, translation, extra_dims=0, stack=F
     """invert_point"""
     if stack:
         rotation = P.Reshape()(rotation, P.Shape()(rotation)[:-2] + (9,))
-        rotation = C.Map()(squeeze, P.Split(-1, 9)(rotation))
-        translation = C.Map()(squeeze, P.Split(-1, 3)(translation))
+        rotation = P.Split(-1, 9)(rotation)
+        rotation = (P.Squeeze()(rotation[0]), P.Squeeze()(rotation[1]), P.Squeeze()(rotation[2]),
+                    P.Squeeze()(rotation[3]), P.Squeeze()(rotation[4]), P.Squeeze()(rotation[5]),
+                    P.Squeeze()(rotation[6]), P.Squeeze()(rotation[7]), P.Squeeze()(rotation[8]))
+        translation_x, translation_y, translation_z = P.Split(-1, 3)(translation)
+        translation_x = P.Squeeze()(translation_x)
+        translation_y = P.Squeeze()(translation_y)
+        translation_z = P.Squeeze()(translation_z)
+        translation = (translation_x, translation_y, translation_z)
     for _ in range(extra_dims):
         rotation = (P.ExpandDims()(rotation[0], -1), P.ExpandDims()(rotation[1], -1), P.ExpandDims()(rotation[2], -1),
                     P.ExpandDims()(rotation[3], -1), P.ExpandDims()(rotation[4], -1), P.ExpandDims()(rotation[5], -1),
@@ -265,18 +282,21 @@ def pre_compose(quaternion, rotation, translation, update):
 
 def scale_translation(translation, position_scale):
     """Return a new quat affine with a different scale for translation."""
-    return [val * position_scale for val in translation]
+    scaled = [translation[0] * position_scale,
+              translation[1] * position_scale,
+              translation[2] * position_scale,]
+    return scaled
 
 
 def to_tensor(quaternion, translation):
-    translation = C.Map()(expand_dim, translation)
+    translation = (P.ExpandDims()(translation[0], -1), P.ExpandDims()(translation[1], -1),
+                   P.ExpandDims()(translation[2], -1),)
     return mnp.concatenate((quaternion,) + translation, axis=-1)
 
 
 def from_tensor(tensor, normalize=False):
     quaternion, tx, ty, tz = mnp.split(tensor, [4, 5, 6], axis=-1)
-    translation = (tx, ty, tz)
-    translation = C.Map()(squeeze, translation)
+    translation = (P.Squeeze()(tx), P.Squeeze()(ty), P.Squeeze()(tz))
     return quat_affine(quaternion, translation, normalize=normalize)
 
 
@@ -285,8 +305,16 @@ def vec_to_tensor(v):
     return mnp.stack(v, axis=-1)
 
 
-def apply_to_point(rotation, translation, point):
+def apply_to_point(rotation, translation, point, extra_dims=0):
     """apply to point func"""
+    for _ in range(extra_dims):
+        rotation = (P.ExpandDims()(rotation[0], -1), P.ExpandDims()(rotation[1], -1), P.ExpandDims()(rotation[2], -1),
+                    P.ExpandDims()(rotation[3], -1), P.ExpandDims()(rotation[4], -1), P.ExpandDims()(rotation[5], -1),
+                    P.ExpandDims()(rotation[6], -1), P.ExpandDims()(rotation[7], -1), P.ExpandDims()(rotation[8], -1))
+        translation = (P.ExpandDims()(translation[0], -1), P.ExpandDims()(translation[1], -1),
+                       P.ExpandDims()(translation[2], -1),)
     rot_point = apply_rot_to_vec(rotation, point)
-    result = C.Map()(add, rot_point, translation)
+    result = (rot_point[0] + translation[0],
+              rot_point[1] + translation[1],
+              rot_point[2] + translation[2],)
     return result

@@ -20,7 +20,7 @@ import mindspore.numpy as mnp
 import mindspore.ops as ops
 from mindspore import Parameter
 from mindspore.common.tensor import Tensor
-from ..common.utils import apply_to_point, _invert_point
+from ..common.geometry import apply_to_point, invert_point
 from .initializer import lecun_init
 
 
@@ -107,10 +107,12 @@ class InvariantPointAttention(nn.Cell):
         # Construct query points of shape:
         # First construct query points in local frame.
         q_point_local = self.q_point_local(inputs_1d)
-        q_point_local = mnp.stack(mnp.split(q_point_local, 3, axis=-1), axis=0)
 
+        q_point_local = mnp.split(q_point_local, 3, axis=-1)
+        q_point_local = (ops.Squeeze()(q_point_local[0]), ops.Squeeze()(q_point_local[1]),
+                         ops.Squeeze()(q_point_local[2]))
         # Project query points into global frame.
-        q_point_global = apply_to_point(rotation, translation, q_point_local)
+        q_point_global = apply_to_point(rotation, translation, q_point_local, 1)
 
         # Reshape query point for later use.
         q_point0 = mnp.reshape(q_point_global[0], (num_residues, num_head, num_point_qk))
@@ -125,8 +127,10 @@ class InvariantPointAttention(nn.Cell):
         kv_point_local = self.kv_point_local(inputs_1d)
 
         kv_point_local = mnp.split(kv_point_local, 3, axis=-1)
+        kv_point_local = (ops.Squeeze()(kv_point_local[0]), ops.Squeeze()(kv_point_local[1]),
+                          ops.Squeeze()(kv_point_local[2]))
         # Project key and value points into global frame.
-        kv_point_global = apply_to_point(rotation, translation, kv_point_local)
+        kv_point_global = apply_to_point(rotation, translation, kv_point_local, 1)
 
         kv_point_global0 = mnp.reshape(kv_point_global[0], (num_residues, num_head, (num_point_qk + num_point_v)))
         kv_point_global1 = mnp.reshape(kv_point_global[1], (num_residues, num_head, (num_point_qk + num_point_v)))
@@ -181,7 +185,7 @@ class InvariantPointAttention(nn.Cell):
 
         result_scalar = mnp.reshape(result_scalar, [num_residues, num_head * num_scalar_v])
 
-        result_point_local = _invert_point(result_point_global, rotation, translation)
+        result_point_local = invert_point(result_point_global, rotation, translation, 1)
 
         output_feature1 = result_scalar
         output_feature20 = result_point_local[0]

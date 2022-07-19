@@ -5,7 +5,7 @@
 [![LICENSE](https://img.shields.io/github/license/mindspore-ai/mindspore.svg?style=flat-square)](https://github.com/mindspore-ai/mindspore/blob/master/LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://gitee.com/mindspore/mindscience/pulls)
 
-# MindSPONGE
+# **MindSPONGE**
 
 <!-- TOC -->
 
@@ -24,36 +24,43 @@
 
 <!-- TOC -->
 
-## MindSPONGE介绍
+## **MindSPONGE介绍**
 
 MindSPONGE(Simulation Package Of Next GEneration molecular modelling)是基于[昇思MindSpore](https://www.mindspore.cn/)的计算生物领域套件，支持分子动力学、蛋白质折叠等常用功能，旨在于为广大的科研人员、老师及学生提供高效易用的AI计算生物软件。
 
 <img src="docs/archi.png" alt="MindSPONGE Architecture" width="600"/>
 
-## 最新消息
+## **最新消息**
 
 - 2022.07.18 论文"SPONGE: A GPU-Accelerated Molecular Dynamics Package with Enhanced Sampling and AI-Driven Algorithms"发表于期刊Chinese Journal of Chemistry。详情参见[论文](https://onlinelibrary.wiley.com/doi/epdf/10.1002/cjoc.202100456)和[代码](https://gitee.com/mindspore/mindscience/tree/dev-md/MindSPONGE/mindsponge/ccsrc/molecular_dynamics)
+- 2022.07.09 MEGA-Assessment在CAMEO-QE月榜取得第一名
 - 2022.06.27 [发布首个百万级开源蛋白质结构训练数据集PSP](https://arxiv.org/pdf/2206.12240v1.pdf)
 - 2022.04.21 [CAMEO竞赛月榜第一](https://www.huawei.com/cn/news/2022/4/mindspore-cameo-protein-ascend)
 
-## 初体验
-
-- PSP数据集加载
-
-```bash
-```
+## **初体验**
 
 - 蛋白质 violation 计算
-    ###### 使蛋白质推理模型预测的pdb虽然在绝大多数原子上都准确预测出理想的键长和键角，然而原子间是否存在冲突以及肽键信息对于真实结构也尤为重要，violation 则计算了预测pdb的总原子间冲突程度以及肽键键长键角是否满足一定的限制条件。该计算数值对于评估预测蛋白质结构是否合理以及后续做蛋白质relax尤其重要
+
+    ##### 使蛋白质推理模型预测的pdb虽然在绝大多数原子上都准确预测出理想的键长和键角，然而原子间是否存在冲突以及肽键信息对于真实结构也尤为重要，violation 则计算了预测pdb的总原子间冲突程度以及肽键键长键角是否满足一定的限制条件。该计算数值对于评估预测蛋白质结构是否合理以及后续做蛋白质relax尤其重要
 
 ```bash
-from mindsponge.core.loss import get_violation_loss
+from mindsponge.loss import get_violation_loss
 violation, _ = get_violation_loss(pdb_path)
 ```
 
 - 四元数与旋转矩阵转换
 
+    ##### geometry模块提供基础四元数、旋转矩阵、向量操作
+
 ```bash
+from mindsponge.common.geometry import generate_new_affine
+from mindsponge.common.geometry import quat_to_rot, rot_to_quat
+# quaternion is a mindspore tensor
+# rotation_matrix is a tuple of mindspore tensor, length is 9
+# translation is a tuple of mindsproe tensor, length is 3
+quat, rot, trans = generate_new_affine(128) # 128 is the num of residues
+transformed_rot = quat_to_rot(quat)
+transformed_quat = rot_to_quat(rot)
 ```
 
 - 简单体系分子模拟
@@ -61,30 +68,23 @@ violation, _ = get_violation_loss(pdb_path)
 ```bash
 ```
 
-- Amber文件加载
+**更多应用案例请见**：
 
-```bash
-```
-
-更多应用案例请见：
-
-- [蛋白质结构松弛](https://gitee.com/izayoi16/mindscience/blob/dev-md/MindSPONGE/applications/molecular_dynamics/protein_relax/protein_relax_pipeline.py)
-- [蛋白质结构预测]()
-- [蛋白质结构质量评估]()
-- [MSA引擎]()
-- 分子对接打分(TO BE DONE)
+- [蛋白质结构松弛](https://gitee.com/izayoi16/mindscience/blob/dev-md/MindSPONGE/applications/molecular_dynamics/protein_relax/)
+- [蛋白质结构预测 MEGA-Fold](https://gitee.com/izayoi16/mindscience/blob/dev-md/MindSPONGE/applications/structure_prediction/)
+- [蛋白质结构评估 MEGA-Assessment](https://gitee.com/izayoi16/mindscience/blob/dev-md/MindSPONGE/applications/structure_prediction/)
+- [共进化数据引擎 MEGA-EvoGen](https://gitee.com/izayoi16/mindscience/blob/dev-md/MindSPONGE/applications/structure_prediction/)
 - 基于功能的蛋白设计(TO BE DONE)
 - 基于结构的蛋白设计(TO BE DONE)
 - 蛋白质功能预测(TO BE DONE)
 - 化合物分子表征模型(TO BE DONE)
 
-## 安装教程
+## **安装教程**
 
-- 依赖包
+### 依赖安装
 
 ```bash
-numpy
-biopython
+pip install -r requirements
 ```
 
 ### 硬件支持情况
@@ -100,23 +100,36 @@ biopython
 
 ### pip安装
 
-- whl包获取路径
-
 ```bash
-pip install mindsponge-*.whl
+pip install mindscience_sponge_[gpu|ascend]
 ```
 
 ### 源码安装
 
 ```bash
 git clone https://gitee.com/mindspore/mindscience.git
-cd {PATH}/MindScience/MindSPONGE
-bash build.sh -e [gpu|ascend]
-cd build
-pip install ./whl/mindsponge-*.whl
+cd {PATH}/mindscience/MindSPONGE
 ```
 
-## 社区
+#### 昇腾后端
+
+```bash
+bash build.sh -e ascend
+```
+
+#### GPU后端 (若使用传统分子动力学sponge，开启编译选项 `t` )
+
+```bash
+bash build.sh -e gpu -t on -j32
+```
+
+#### 安装编译所得whl包，在`{PATH}/mindscience/MinsSPONGE/output`下
+
+```bash
+pip install {PATH}/mindscience/MindSPONGE/output/mindscience_sponge*.whl
+```
+
+## **社区**
 
 ### SIG
 
@@ -134,6 +147,6 @@ MindSPONGE SIG小组为广大科研人员，老师和学生提供高效易用的
 
 - [高毅勤课题组](https://www.chem.pku.edu.cn/gaoyq/)，[陈迪青](https://gitee.com/dechin)，[黄渝鹏](https://gitee.com/gao_hyp_xyj_admin)，[刘思睿](https://gitee.com/sirui63)，[夏义杰](https://gitee.com/gao_hyp_xyj_admin)，[杨奕](https://gitee.com/helloyesterday)，[张骏](https://gitee.com/jz_90)
 
-## 许可证
+## **许可证**
 
 [Apache License 2.0](LICENSE)
