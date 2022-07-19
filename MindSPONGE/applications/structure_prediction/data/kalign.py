@@ -21,8 +21,8 @@ import stat
 import subprocess
 
 from absl import logging
-
-from mindsponge.data.utils import tmpdir_manager, timing, to_a3m
+from mindsponge.data.utils import timing
+from data.utils import tmpdir_manager
 
 
 class Kalign:
@@ -35,6 +35,17 @@ class Kalign:
           binary_path: The path to the Kalign binary.
         """
         self.binary_path = binary_path
+
+    @staticmethod
+    def to_a3m(sequences):
+        """Converts sequences to an a3m file."""
+        names = ['sequence %d' % i for i in range(1, len(sequences) + 1)]
+        a3m = []
+        for sequence, name in zip(sequences, names):
+            a3m.append(u'>' + name + u'\n')
+            a3m.append(sequence + u'\n')
+        return ''.join(a3m)
+
 
     def align(self, sequences):
         """Aligns the sequences and returns the alignment in A3M string.
@@ -64,7 +75,7 @@ class Kalign:
             output_a3m_path = os.path.join(query_tmp_dir, 'output.a3m')
 
             with os.fdopen(os.open(input_fasta_path, os.O_RDWR|os.O_CREAT, stat.S_IRWXU), 'w') as f:
-                f.write(to_a3m(sequences))
+                f.write(self.to_a3m(sequences))
 
             cmd = [self.binary_path, '-i', input_fasta_path, '-o', output_a3m_path, '-format', 'fasta',]
 
