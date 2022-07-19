@@ -75,6 +75,40 @@ class TriangleAttention(nn.Cell):
         nonbatched_bias = self.matmul(P.Reshape()(pair_act, (-1, pair_act.shape[-1])), feat_2d_weight)
         nonbatched_bias = P.Transpose()(P.Reshape()(nonbatched_bias, (q, k, -1)), (2, 0, 1))
 
+        if self.slice_num:
+            pair_act_ori_shape = P.Shape()(pair_act)
+            slice_shape = (self.slice_num, -1) + pair_act_ori_shape[1:]
+            pair_act = P.Reshape()(pair_act, slice_shape)
+            bias_shape = P.Shape()(bias)
+            bias = P.Reshape()(bias, slice_shape[:2] + bias_shape[1:])
+
+            slice_idx = 0
+            slice_idx_tensor = self.idx
+            pair_act_tuple = ()
+
+            pair_act_slice = P.Gather()(pair_act, slice_idx_tensor, 0)
+            bias_slice = P.Gather()(bias, slice_idx_tensor, 0)
+            pair_act_slice = self.attn_mod(pair_act_slice, pair_act_slice, bias_slice, index, nonbatched_bias)
+            pair_act_slice = P.Reshape()(pair_act_slice, ((1,) + P.Shape()(pair_act_slice)))
+            pair_act_tuple = pair_act_tuple + (pair_act_slice,)
+            slice_idx += 1
+            slice_idx_tensor += 1
+
+            while slice_idx < self.slice_num:
+                pair_act_slice = P.Gather()(pair_act, slice_idx_tensor, 0)
+                pair_act_slice = F.depend(pair_act_slice, pair_act_tuple[-1])
+                bias_slice = P.Gather()(bias, slice_idx_tensor, 0)
+                pair_act_slice = self.attn_mod(pair_act_slice, pair_act_slice, bias_slice, index, nonbatched_bias)
+                pair_act_slice = P.Reshape()(pair_act_slice, ((1,) + P.Shape()(pair_act_slice)))
+                pair_act_tuple = pair_act_tuple + (pair_act_slice,)
+                slice_idx += 1
+                slice_idx_tensor += 1
+            pair_act = P.Concat()(pair_act_tuple)
+            pair_act = P.Reshape()(pair_act, pair_act_ori_shape)
+
+            if self.orientation_is_per_column:
+                pair_act = mnp.swapaxes(pair_act, -2, -3)
+            return pair_act
         pair_act = self.attn_mod(pair_act, pair_act, bias, index, nonbatched_bias)
         if self.orientation_is_per_column:
             pair_act = P.Transpose()(pair_act, (1, 0, 2))

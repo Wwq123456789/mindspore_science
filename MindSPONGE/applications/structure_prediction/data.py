@@ -300,11 +300,12 @@ class Feature:
                  subsample_templates=True, fixed_size=True, seed=0, random_recycle=False):
         """ensemble"""
         self.ensemble_num += 1
-        # exist numpy random op
-        keep_indices = block_delete_msa_indices(data["msa"], msa_fraction_per_block, randomize_num_blocks, num_blocks)
-        for k in _MSA_FEATURE_NAMES:
-            if k in data:
-                data[k] = data[k][keep_indices]
+        if self.is_training:
+            keep_indices = block_delete_msa_indices(data["msa"], msa_fraction_per_block, randomize_num_blocks,
+                                                    num_blocks)
+            for k in _MSA_FEATURE_NAMES:
+                if k in data:
+                    data[k] = data[k][keep_indices]
         # exist numpy random op
         is_sel, not_sel_seq, sel_seq = sample_msa(data["msa"], max_msa_clusters)
         for k in _MSA_FEATURE_NAMES:

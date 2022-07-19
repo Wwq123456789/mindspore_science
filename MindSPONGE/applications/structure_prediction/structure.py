@@ -24,8 +24,8 @@ from mindsponge.cell import InvariantPointAttention
 import mindsponge.common.residue_constants as residue_constants
 from mindsponge.cell.initializer import lecun_init
 from mindsponge.common.utils import torsion_angles_to_frames, frames_and_literature_positions_to_atom14_pos, \
-    pre_compose, scale_translation, to_tensor_new, generate_new_affine, to_tensor, from_tensor, vecs_to_tensor, \
-    atom14_to_atom37, get_exp_frames, get_exp_atom_pos
+    vecs_to_tensor, atom14_to_atom37, get_exp_frames, get_exp_atom_pos
+from mindsponge.common.geometry import generate_new_affine, to_tensor, pre_compose, scale_translation
 
 
 class MultiRigidSidechain(nn.Cell):
@@ -94,13 +94,11 @@ class MultiRigidSidechain(nn.Cell):
         unnormalized_angles = self.unnormalized_angles(self.relu(act))
 
         unnormalized_angles = mnp.reshape(unnormalized_angles, [num_res, 7, 2])
-
-        unnormalized_angles = ops.Cast()(unnormalized_angles, mstype.float32)
         angles = self.l2_normalize(unnormalized_angles)
 
-        backb_to_global = [rotation[0][0], rotation[0][1], rotation[0][2],
-                           rotation[1][0], rotation[1][1], rotation[1][2],
-                           rotation[2][0], rotation[2][1], rotation[2][2],
+        backb_to_global = [rotation[0], rotation[1], rotation[2],
+                           rotation[3], rotation[4], rotation[5],
+                           rotation[6], rotation[7], rotation[8],
                            translation[0], translation[1], translation[2]]
 
         all_frames_to_global = torsion_angles_to_frames(aatype, backb_to_global, angles,
@@ -170,15 +168,13 @@ class FoldIteration(nn.Cell):
         # Jumper et al. (2021) Alg. 23 "Backbone update"
         # Affine update
         affine_update = self.affine_update(act)
-
         quaternion, rotation, translation = pre_compose(quaternion, rotation, translation, affine_update)
-        _, rotation1, translation1 = scale_translation(quaternion, translation, rotation, 10.0)
-
+        translation1 = scale_translation(translation, 10.0)
+        rotation1 = rotation
         angles_sin_cos, unnormalized_angles_sin_cos, atom_pos, frames = \
             self.mu_side_chain(rotation1, translation1, act, initial_act, aatype)
 
-        affine_output = to_tensor_new(quaternion, translation)
-
+        affine_output = to_tensor(quaternion, translation)
         quaternion = F.stop_gradient(quaternion)
         rotation = F.stop_gradient(rotation)
         res = (act, quaternion, translation, rotation, affine_output, angles_sin_cos, unnormalized_angles_sin_cos, \
@@ -213,11 +209,9 @@ class StructureModule(nn.Cell):
         act = self.single_layer_norm(single)
         initial_act = act
         act = self.initial_projection(act)
-        quaternion, rotation, translation = generate_new_affine(sequence_mask)
-        aff_to_tensor = to_tensor(quaternion, mnp.transpose(translation))
+        quaternion, rotation, translation = generate_new_affine(self.seq_length)
         act_2d = self.pair_layer_norm(pair)
         # folder iteration
-        quaternion, rotation, translation = from_tensor(aff_to_tensor)
         # todo 8 iteration
         atom_pos, affine_output_new, angles_sin_cos_new, um_angles_sin_cos_new, sidechain_frames, act_iter = \
             self.iteration_operation(act, act_2d, sequence_mask, quaternion, rotation, translation, initial_act, aatype)

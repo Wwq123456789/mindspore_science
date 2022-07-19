@@ -76,3 +76,4 @@
 "mindscience/MindSPONGE/mindsponge/python/control/integrator/brownian.py"              "unexpected-keyword-arg"
 "mindscience/MindSPONGE/mindsponge/python/data/pdb_parser.py"                               "unused-import"
 "mindscience/MindSPONGE/applications/structure_prediction/model.py"                        "unused-variable"
+"mindscience/MindSPONGE/mindsponge/python/cell/initializer.py"                         "protected-access"
