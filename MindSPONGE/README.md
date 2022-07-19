@@ -4,6 +4,7 @@
 [![PyPI](https://badge.fury.io/py/mindspore.svg)](https://badge.fury.io/py/mindspore)
 [![LICENSE](https://img.shields.io/github/license/mindspore-ai/mindspore.svg?style=flat-square)](https://github.com/mindspore-ai/mindspore/blob/master/LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://gitee.com/mindspore/mindscience/pulls)
+
 # MindSPONGE
 
 <!-- TOC -->
@@ -15,7 +16,7 @@
     - [安装教程](#安装教程)
         - [硬件支持情况](#硬件支持情况)
         - [pip安装](#pip安装)
-            - [源码安装](#源码安装)
+        - [源码安装](#源码安装)
     - [社区](#社区)
         - [SIG](#sig)
         - [合作者](#合作者)
@@ -31,6 +32,7 @@ MindSPONGE(Simulation Package Of Next GEneration molecular modelling)是基于[�
 
 ## 最新消息
 
+- 2022.07.18 论文"SPONGE: A GPU-Accelerated Molecular Dynamics Package with Enhanced Sampling and AI-Driven Algorithms"发表于期刊Chinese Journal of Chemistry。详情参见[论文](https://onlinelibrary.wiley.com/doi/epdf/10.1002/cjoc.202100456)和[代码](https://gitee.com/mindspore/mindscience/tree/dev-md/MindSPONGE/mindsponge/ccsrc/molecular_dynamics)
 - 2022.06.27 [发布首个百万级开源蛋白质结构训练数据集PSP](https://arxiv.org/pdf/2206.12240v1.pdf)
 - 2022.04.21 [CAMEO竞赛月榜第一](https://www.huawei.com/cn/news/2022/4/mindspore-cameo-protein-ascend)
 
@@ -87,14 +89,14 @@ biopython
 
 ### 硬件支持情况
 
-| 硬件平台      | 操作系统        | 状态  |
+| 硬件平台      | 操作系统        | 状态 |
 | :------------ | :-------------- | :--- |
-| Ascend 910    | Ubuntu-x86      | ✔️   |
-|               | Ubuntu-aarch64  | ✔️   |
-|               | EulerOS-aarch64 | ✔️   |
-|               | CentOS-x86      | ✔️   |
-|               | CentOS-aarch64  | ✔️   |
-| GPU CUDA 10.1 | Ubuntu-x86      | ✔️   |
+| Ascend 910    | Ubuntu-x86      | ✔️ |
+|               | Ubuntu-aarch64  | ✔️ |
+|               | EulerOS-aarch64 | ✔️ |
+|               | CentOS-x86      | ✔️ |
+|               | CentOS-aarch64  | ✔️ |
+| GPU CUDA 10.1 | Ubuntu-x86      | ✔️ |
 
 ### pip安装
 
@@ -104,7 +106,7 @@ biopython
 pip install mindsponge-*.whl
 ```
 
-#### 源码安装
+### 源码安装
 
 ```bash
 git clone https://gitee.com/mindspore/mindscience.git
@@ -118,11 +120,19 @@ pip install ./whl/mindsponge-*.whl
 
 ### SIG
 
-查看MindSpore如何进行[开放治理](https://gitee.com/mindspore/community/blob/master/governance.md)。
+MindSPONGE SIG(Special Interesting Group)是由一群有兴趣，有使命，旨在AI×生物计算领域做出一番成就的人组成的团队。
+
+MindSPONGE SIG小组为广大科研人员，老师和学生提供高效易用的AI计算生物软件的同时，为在这个领域有着强大的能力或者浓厚的兴趣的人们提供了一个能够共同交流合作的平台。
+
+在SIG小组中，我们会举办各种活动，其中最为隆重的暑期学校活动即将到来，活动时间为8月11日-8月15日，我们将会邀请到六位MindSPONGE SIG的老师进行一场为期五天的授课，授课主题主要包括MindSpore基础，分子动力学以及AI × Science进阶课程三大主题，还会提供四次上机课时让学生们亲自动手体验。如果想要报名暑期学校，请将自己的简历发送至邮箱dingyahao@huawei.com，我们随时欢迎你的到来。
+
+在SIG小组中，我们还会发布众智任务和[开源实习任务](https://gitee.com/mindspore/community/issues/I561LI?from=project-issue)，欢迎大家来认领。
+
+如果想加入我们，成为我们小组的成员，请将自己的简历发送至邮箱dingyahao@huawei.com，我们无时无刻不在期待着你的到来。
 
 ### 合作者
 
-- [高毅勤课题组]()
+- [高毅勤课题组](https://www.chem.pku.edu.cn/gaoyq/)，[陈迪青](https://gitee.com/dechin)，[黄渝鹏](https://gitee.com/gao_hyp_xyj_admin)，[刘思睿](https://gitee.com/sirui63)，[夏义杰](https://gitee.com/gao_hyp_xyj_admin)，[杨奕](https://gitee.com/helloyesterday)，[张骏](https://gitee.com/jz_90)
 
 ## 许可证
 
