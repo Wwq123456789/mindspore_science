@@ -1,13 +1,4 @@
-# Copyright 2021-2022 The AIMM Group at Shenzhen Bay Laboratory & Peking University
-#
-# Developer: Yi Isaac Yang, Dechin Chen, Jun Zhang, Yijie Xia
-#
-# Email: yangyi@szbl.ac.cn
-#
-# This code is a part of MindSPONGE.
-#
-# The Cybertron-Code is open-source software based on the AI-framework:
-# MindSpore (https://www.mindspore.cn/)
+# Copyright 2021 The AIMM Group at Shenzhen Bay Laboratory & Peking University & Huawei Technologies Co., Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,232 +12,168 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""
-Neighbour list
-"""
-
+"""neighbour list"""
 import mindspore as ms
-import mindspore.numpy as msnp
-from mindspore import Tensor, ms_function
+from mindspore import Tensor
 from mindspore import Parameter
+from mindspore import numpy as msnp
+from mindspore.common.api import ms_function
+from mindspore.common.initializer import initializer
 from mindspore.nn import Cell
 from mindspore import ops
 from mindspore.ops import functional as F
 
-from . import FullConnectNeighbours, DistanceNeighbours, GridNeighbours
-from ..system import Molecule
+from ..common.functions import get_full_connect_index
+from ..space.system import SystemCell
 
 
 class NeighbourList(Cell):
-    r"""Neighbour list
-
-    Args:
-
-        system (Molecule):      Simulation system.
-
-        cutoff (float):         Cutoff distance. Default: None
-
-        update_steps (int):     Steps of update frequency. Default: 20
-
-        exclude_index (Tensor): Tensor of shape (B, A, Ex). Data type is int.
-                                Index of neighbour atoms which could be excluded from the neighbour list.
-                                Default: None
-
-        num_neighbours (int):   Number of neighbours. If input "None", this value will be calculated by
-                                the ratio of the number of neighbouring grids to the total number of grids.
-                                Default: None
-
-        num_cell_cut (int):     Number of subdivision of grid cells according to cutoff. Default: 1
-
-        cutoff_scale (float):   Factor to scale cutoff distance. Default: 1.2
-
-        cell_cap_scale (float): Scale factor for "cell_capacity". Default: 1.25
-
-        grid_num_scale (float): Scale factor to calculate "num_neighbours" by ratio of grids.
-                                If "num_neighbours" is not None, it will not be used. Default: 1.5
-
-        large_dis (float):      A large number of distance to fill the default atoms. Default: 1e4
-
-        use_grids (bool):       Whether to use grids to calculate the neighbour list. Default: None
-
-
-    Symbols:
-
-        B:  Number of simulation walker.
-
-        A:  Number of atoms in system.
-
-        N:  Number of neighbour atoms.
-
-        D:  Dimension of position coordinates.
-
-        Ex: Maximum number of excluded neighbour atoms.
-
-    """
-
+    """neighbourlist"""
     def __init__(self,
-                 system: Molecule,
-                 cutoff: float = None,
-                 update_steps: int = 20,
+                 system: SystemCell,
+                 cutoff: Tensor = None,
+                 max_neighbours: int = 64,
                  exclude_index: Tensor = None,
-                 num_neighbours: int = None,
-                 num_cell_cut: int = 1,
-                 cutoff_scale: float = 1.2,
-                 cell_cap_scale: float = 1.25,
-                 grid_num_scale: float = 2,
-                 large_dis: float = 1e4,
-                 use_grids: bool = None,
+                 cutoff_extend: Tensor = 0.2,
+                 update_steps: int = 20
                  ):
-
         super().__init__()
 
-        self.num_walker = system.num_walker
-        self.coordinate = system.get_coordinate()
-        self.num_atoms = self.coordinate.shape[-2]
-        self.dim = self.coordinate.shape[-1]
+        self.system = system
 
-        self.pbc_box = system.get_pbc_box()
+        self.num_walkers = self.system.num_walkers
+        self.num_atoms = self.system.num_atoms
 
-        self.atom_mask = system.atom_mask
-        self.exclude_index = exclude_index
-        if exclude_index is not None:
-            self.exclude_index = Tensor(exclude_index, ms.int32)
+        self.coordinates = self.system.coordinates
+        self.pbc_box = self.system.pbc_box
 
-        large_dis = Tensor(large_dis, ms.float32)
-        self.units = system.units
-        self.use_grids = use_grids
+        self.units = self.system.units
 
-        self.no_mask = False
+        self.max_neighbours = max_neighbours
+
+        self.cutoff = cutoff
         if cutoff is None:
-            self.cutoff = None
-            self.neighbour_list = FullConnectNeighbours(self.num_atoms)
-            if self.exclude_index is None:
-                self.no_mask = True
+            self.num_neighbours = self.num_atoms - 1
         else:
-            self.cutoff = Tensor(cutoff, ms.float32)
-            if self.use_grids or self.use_grids is None:
-                self.neighbour_list = GridNeighbours(
-                    cutoff=self.cutoff,
-                    coordinate=self.coordinate,
-                    pbc_box=self.pbc_box,
-                    atom_mask=self.atom_mask,
-                    exclude_index=self.exclude_index,
-                    num_neighbours=num_neighbours,
-                    num_cell_cut=num_cell_cut,
-                    cutoff_scale=cutoff_scale,
-                    cell_cap_scale=cell_cap_scale,
-                    grid_num_scale=grid_num_scale,
-                )
-                if self.neighbour_list.neigh_capacity >= self.num_atoms:
-                    if self.use_grids:
-                        print('Warning! The number of neighbour atoms in GridNeighbours (' +
-                              str(self.neighbour_list.neigh_capacity) +
-                              ') is not less than the number of atoms ('+str(self.num_atoms) +
-                              '. It would be more efficient to use "DistanceNeighbours"'
-                              ' (set "use_grids" to False or None).')
-                    else:
-                        self.use_grids = False
-                else:
-                    self.use_grids = True
+            self.num_neighbours = max_neighbours
 
-            if not self.use_grids:
-                if num_neighbours is None and self.pbc_box is not None:
-                    volume = msnp.min(F.reduce_prod(self.pbc_box, -1))
-                    num_neighbours = grid_num_scale * self.num_atoms * \
-                        msnp.power(cutoff*cutoff_scale, self.dim) / volume
-                    num_neighbours = num_neighbours.astype(ms.int32)
+        self.exclude_index = exclude_index
+        self.no_mask = False
+        if self.cutoff is None and self.exclude_index is None:
+            self.no_mask = True
+        # (1,A,n) or (B,A,n)
+        if exclude_index is not None:
+            exclude_index = Tensor(exclude_index, ms.int32)
+            if exclude_index.ndim < 2:
+                raise ValueError('The rank of exclude_index cannot be smaller than 2!')
 
-                self.neighbour_list = DistanceNeighbours(
-                    cutoff=self.cutoff,
-                    num_neighbours=num_neighbours,
-                    atom_mask=self.atom_mask,
-                    exclude_index=self.exclude_index,
-                    use_pbc=True,
-                    cutoff_scale=cutoff_scale,
-                    large_dis=large_dis
-                )
+            if exclude_index.shape[-2] != self.num_atoms:
+                raise ValueError('The last dimension of exclude_index (' + str(exclude_index.shape[-1]) +
+                                 ') must be equal to the num_atoms (' + str(self.num_atoms) + ')!')
 
-        self.num_neighbours = self.neighbour_list.num_neighbours
+            if exclude_index.ndim == 2:
+                exclude_index = F.expand_dims(exclude_index, 0)
+            if exclude_index.shape[0] != self.num_walkers and exclude_index.shape[0] != 1:
+                raise ValueError('The first dimension of exclude_index (' + str(exclude_index.shape[0]) +
+                                 ') must be equal to 1 or num_walkers (' + str(self.num_walkers) + ')!')
 
-        self.update_steps = update_steps
-        if update_steps <= 0:
-            raise ValueError('update_steps must be larger than 0!')
+            if exclude_index.ndim > 3:
+                raise ValueError('The rank of exclude_index cannot be larger than 3!')
 
-        index, mask = self.calcaulate(self.coordinate, self.pbc_box)
+            self.exclude_index = exclude_index
 
-        self.neighbours = Parameter(
-            index, name='neighbours', requires_grad=False)
+        self.shape = (self.num_walkers, self.num_atoms, self.num_neighbours)
+
+        self.neighbour_index = Parameter(initializer('zero', self.shape, ms.int32), name='neighbour_index',
+                                         requires_grad=False)
+
         if self.cutoff is None and self.exclude_index is None:
             self.neighbour_mask = None
+            self.neighbour_shift = None
         else:
-            self.neighbour_mask = Parameter(
-                mask, name='neighbour_mask', requires_grad=False)
+            self.neighbour_mask = Parameter(initializer('zero', self.shape, ms.bool_), name='neighbour_mask',
+                                            requires_grad=False)
+            self.neighbour_shift = Parameter(initializer('zero', self.shape + (1,), ms.float32), name='neighbour_shift',
+                                             requires_grad=False)
+
+        self.cutoff_extend = cutoff_extend
+        if self.cutoff is not None and self.cutoff_extend <= 0:
+            raise ValueError('cutoff_extend must be larger than 0!')
+
+        if update_steps <= 0:
+            raise ValueError('update_steps must be larger than 0!')
+        self.update_steps = update_steps
 
         self.identity = ops.Identity()
 
-    def set_exclude_index(self, exclude_index: Tensor):
-        """set exclude index"""
-        if exclude_index is None:
-            return True
-        self.exclude_index = Tensor(exclude_index, ms.int32)
-        self.neighbour_list.set_exclude_index(exclude_index)
-        index, mask = self.calcaulate(self.coordinate, self.pbc_box)
-        success = True
-        success = F.depend(success, F.assign(self.neighbours, index))
-        if self.neighbour_mask is None:
-            self.neighbour_mask = Parameter(
-                mask, name='neighbour_mask', requires_grad=False)
-        else:
-            success = F.depend(success, F.assign(self.neighbour_mask, mask))
-        return success
+        self.update()
 
-    def print_info(self):
-        """print information of neighbour list"""
-        self.neighbour_list.print_info()
+    def set_cutoff(self, cutoff):
+        self.cutoff = cutoff
+        if cutoff is None:
+            self.num_neighbours = self.num_atoms - 1
+        else:
+            self.num_neighbours = self.max_neighbours
+            if self.cutoff_extend <= 0:
+                raise ValueError('cutoff_extend must be larger than 0!')
         return self
 
-    @ms_function
-    def calcaulate(self, coordinate: Tensor, pbc_box: Tensor = None):
-        """calculate neighbour list"""
-        coordinate = F.stop_gradient(coordinate)
-        pbc_box = F.stop_gradient(pbc_box)
-        if self.cutoff is None:
-            return self.neighbour_list(self.atom_mask, self.exclude_index)
+    def set_cutoff_extend(self, extend):
+        self.cutoff_extend = extend
+        if self.cutoff is not None and self.cutoff_extend <= 0:
+            raise ValueError('cutoff_extend must be larger than 0!')
+        return self
 
-        if self.use_grids:
-            return self.neighbour_list(coordinate, pbc_box)
+    def set_update_steps(self, steps):
+        if steps <= 0:
+            raise ValueError('update_steps must be larger than 0!')
+        self.update_steps = steps
+        return steps
 
-        _, index, mask = self.neighbour_list(
-            coordinate, pbc_box, self.atom_mask, self.exclude_index)
-
+    def full_connect_neighbours(self, exclude_index=None):
+        index, mask = get_full_connect_index(self.num_atoms, exclude_index)
+        if self.num_walkers > 1:
+            index = msnp.broadcast_to(index, self.shape)
+            if mask is not None:
+                mask = msnp.broadcast_to(mask, self.shape)
         return index, mask
 
-    @ms_function
-    def get_neighbour_list(self):
-        """get neighbour list"""
-        index = self.identity(self.neighbours)
+    def _update(self):
+        index = None
         mask = None
-        if self.neighbour_mask is not None:
-            mask = self.identity(self.neighbour_mask)
+        if self.cutoff is None:
+            index, mask = self.full_connect_neighbours(self.exclude_index)
+        else:
+            index, mask = self.full_connect_neighbours(self.exclude_index)  # TODO
+
         return index, mask
 
-    def construct(self, coordinate: Tensor, pbc_box: Tensor = None) -> bool:
-        r"""Gather coordinate of neighbours atoms.
+    @ms_function
+    def update(self):
+        index, mask = self._update()
+
+        success = True
+        success = F.depend(success, F.assign(self.neighbour_index, index))
+        if self.neighbour_mask is not None:
+            success = F.depend(success, F.assign(self.neighbour_mask, mask))
+
+        return success
+
+    def construct(self):
+        r"""Gather coordinates of neighbours atoms.
 
         Args:
-            coordinate (Tensor): Tensor of shape (B,A,D). Data type is float.
-            pbc_box (Tensor):    Tensor of shape (B,D). Data type is float.
+            coordinates (ms.Tensor[float]): (B,A,D)
+            neighbours (ms.Tensor[int]): (B,...)
 
         Returns:
-            neighbours (Tensor):             Tensor of shape (B,A,N). Data type is int.
-            neighbour_mask (Tensor or None): Tensor of shape (B,A,N). Data type is bool.
+            neighbour_atoms (ms.Tensor[float]): (B,...,D)
 
         """
 
-        neighbours, neighbour_mask = self.calcaulate(coordinate, pbc_box)
-        success = True
-        success = F.depend(success, F.assign(self.neighbours, neighbours))
+        index = self.identity(self.neighbour_index)
+        mask = self.neighbour_mask
         if self.neighbour_mask is not None:
-            success = F.depend(success, F.assign(
-                self.neighbour_mask, neighbour_mask))
-        return success
+            mask = self.identity(self.neighbour_mask)
+
+        return index, mask

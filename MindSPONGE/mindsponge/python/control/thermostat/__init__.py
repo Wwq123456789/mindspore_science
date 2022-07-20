@@ -1,13 +1,4 @@
-# Copyright 2021-2022 The AIMM Group at Shenzhen Bay Laboratory & Peking University
-#
-# Developer: Yi Isaac Yang, Dechin Chen, Jun Zhang, Yijie Xia
-#
-# Email: yangyi@szbl.ac.cn
-#
-# This code is a part of MindSPONGE.
-#
-# The Cybertron-Code is open-source software based on the AI-framework:
-# MindSpore (https://www.mindspore.cn/)
+# Copyright 2021 The AIMM Group at Shenzhen Bay Laboratory & Peking University & Huawei Technologies Co., Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""Thermostat"""
-
+"""init"""
+from .temperature import *
 from .thermostat import *
 from .berendsen import *
-from .langevin import *
