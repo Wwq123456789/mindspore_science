@@ -1,4 +1,13 @@
-# Copyright 2021 The AIMM Group at Shenzhen Bay Laboratory & Peking University & Huawei Technologies Co., Ltd
+# Copyright 2021-2022 The AIMM Group at Shenzhen Bay Laboratory & Peking University
+#
+# Developer: Yi Isaac Yang, Dechin Chen, Jun Zhang, Yijie Xia
+#
+# Email: yangyi@szbl.ac.cn
+#
+# This code is a part of MindSPONGE.
+#
+# The Cybertron-Code is open-source software based on the AI-framework:
+# MindSpore (https://www.mindspore.cn/)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,89 +21,90 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""thermostat"""
+"""
+Thermostat
+"""
+
 import mindspore as ms
 from mindspore import Tensor
-from mindspore import Parameter
-from mindspore.nn import Cell
 from mindspore.ops import functional as F
-from mindspore import ms_function
-from ...common.functions import keepdim_sum, concat_last_dim, concat_penulti
-from ...space.system import SystemCell
 
+from .. import Controller
+from ...system import Molecule
+from ...function import functions as func
 
-class Thermostat(Cell):
-    """Thermostat"""
-    def __init__(
-            self,
-            system: SystemCell,
-            temperature: Tensor = 300,
-            time_step: float = 1e-3,
-            coupling_time: float = 4,
-    ):
-        super().__init__()
+class Thermostat(Controller):
+    r"""Thermostat controller for temperature coupling.
 
-        self.system = system
-        self.num_walkers = self.system.num_walkers
-        self.num_atoms = self.system.num_atoms
-        self.dimension = self.system.dimension
-        self.degrees_of_freedom = self.system.degrees_of_freedom
+    Args:
 
-        self.coordinates = self.system.coordinates
+        system (Molecule):      Simulation system
 
-        self.mass = concat_last_dim(self.system.mass)
-        self.inv_mass = concat_penulti(self.system.inv_mass)
-        self.inv_sqrt_mass = concat_penulti(self.system.inv_sqrt_mass)
+        temperature (float):    Reference temperature T_ref (K) for temperature coupling.
+                                Default: 300
 
-        tot_mass = keepdim_sum(self.mass, -1)
-        self.tot_mass = F.expand_dims(tot_mass, -1)
+        control_step (int):     Step interval for controller execution. Default: 1
 
-        natoms = F.select(self.mass > 0, F.ones_like(self.mass), F.zeros_like(self.mass))
-        natoms = keepdim_sum(natoms, -1)
-        self.natoms = F.expand_dims(natoms, -1)
+        time_constant (float)   Time constant \tau_T (ps) for temperature coupling.
+                                Default: 4
 
-        self.units = self.system.units
-        self.kb = self.units.boltzmann()
+    """
+    def __init__(self,
+                 system: Molecule,
+                 temperature: float = 300,
+                 control_step: int = 1,
+                 time_constant: float = 4.,
+                 ):
 
-        self.temperature = Tensor(temperature, ms.float32).reshape(-1, 1)
-        self.target_kinetic = 0.5 * self.degrees_of_freedom * self.kb * self.temperature
+        super().__init__(
+            system=system,
+            control_step=control_step,
+        )
 
-        self.time_step = time_step
+        self.boltzmann = self.units.boltzmann
+        self.kinetic_unit_scale = self.units.kinetic_ref
 
-        coupling_time = Tensor(coupling_time, ms.float32).reshape(-1, 1)
-        if coupling_time.shape[0] != self.num_walkers and coupling_time.shape[0] != 1:
-            raise ValueError('The first shape of coupling_time must equal to 1 or num_walkers')
-        self.coupling_time = Parameter(coupling_time, name='coupling_time', requires_grad=False)
+        self.ref_temp = Tensor(temperature, ms.float32).reshape(-1, 1)
+        self.ref_kinetics = 0.5 * self.degrees_of_freedom * self.boltzmann * self.ref_temp
 
-    def get_kinetic_energy(self, m, v):
-        """get kinetic energy"""
-        return self.system.get_kinetic_energy(m, v)
+        # \tau_t
+        self.time_constant = Tensor(time_constant, ms.float32).reshape(-1, 1)
+        if self.time_constant.shape[0] != self.num_walker and self.time_constant.shape[0] != 1:
+            raise ValueError(
+                'The first shape of time_constant must equal to 1 or num_walker')
 
-    @ms_function
-    def velocity_scale(self, T0, T, ratio=1):
-        """velocity scale"""
-        scale = F.sqrt(1 + ratio * (T0 / T - 1))
-        return scale
+    @property
+    def temperature(self):
+        """reference temperature"""
+        return self.ref_temp
 
-    def get_system_com(self):
-        """get system com"""
-        mr = self.coordinates * F.expand_dims(self.mass, -1)
-        r_com = keepdim_sum(mr, -2) / self.tot_mass
-        return r_com
+    @property
+    def kinetics(self):
+        """reference kinetics"""
+        return self.ref_kinetics
 
-    def get_system_com_vector(self):
-        """get system com vector"""
-        return self.coordinates - self.get_system_com()
+    def set_degrees_of_freedom(self, dofs: int):
+        """set degrees of freedom (DOFs)"""
+        self.degrees_of_freedom = dofs
+        self.ref_kinetics = 0.5 * self.degrees_of_freedom * self.boltzmann * self.ref_temp
+        return self
 
-    def remove_com_translation(self, v):
-        """remove com translation"""
-        # (B,A,D) * (1,A,1)
-        p = F.expand_dims(self.mass, -1) * v
-        # (B,1,D) <- (B,A,D) * (1,A,1) / (B,1,1)
-        dp = keepdim_sum(p, -2) / self.natoms
-        p -= dp
-        return p * self.inv_mass
+    def velocity_scale(self, sim_kinetics: Tensor, ref_kinetics: Tensor, ratio: float = 1) -> Tensor:
+        """calculate the velocity scale factor for temperature coupling"""
+        sim_kinetics = func.keepdim_sum(sim_kinetics, -1)
+        lambda_ = 1. + ratio * (ref_kinetics / sim_kinetics - 1)
+        return F.sqrt(lambda_)
 
-    def construct(self, v, kinetic):
-        scale = self.velocity_scale(self.target_kinetic, kinetic)
-        return v * scale
+    def construct(self,
+                  coordinate: Tensor,
+                  velocity: Tensor,
+                  force: Tensor,
+                  energy: Tensor,
+                  kinetics: Tensor,
+                  virial: Tensor = None,
+                  pbc_box: Tensor = None,
+                  step: int = 0,
+                  ):
+
+        # return coordinate, velocity, force, energy, kinetics, virial, pbc_box
+        raise NotImplementedError

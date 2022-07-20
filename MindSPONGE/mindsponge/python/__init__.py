@@ -1,4 +1,4 @@
-# Copyright 2021 The AIMM Group at Shenzhen Bay Laboratory & Peking University & Huawei Technologies Co., Ltd
+# Copyright 2020-2021 Huawei Technologies Co., Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,4 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""init"""
+"""MindSPONGE"""
+
+from .system import *
+from .potential import *
+from .optimizer import *
+from .core import *
+
+from .function.units import global_units, set_global_units
+from .function.units import set_global_length_unit, set_global_energy_unit

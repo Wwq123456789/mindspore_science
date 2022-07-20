@@ -1,4 +1,13 @@
-# Copyright 2021 The AIMM Group at Shenzhen Bay Laboratory & Peking University & Huawei Technologies Co., Ltd
+# Copyright 2021-2022 The AIMM Group at Shenzhen Bay Laboratory & Peking University
+#
+# Developer: Yi Isaac Yang, Dechin Chen, Jun Zhang, Yijie Xia
+#
+# Email: yangyi@szbl.ac.cn
+#
+# This code is a part of MindSPONGE.
+#
+# The Cybertron-Code is open-source software based on the AI-framework:
+# MindSpore (https://www.mindspore.cn/)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,68 +21,59 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""brownian"""
+"""
+Brownian integrator
+"""
+
+import mindspore as ms
+import mindspore.numpy as msnp
+from mindspore import Tensor
 from mindspore import ops
 from mindspore.ops import functional as F
-from mindspore import Parameter
-from mindspore.nn.optim.optimizer import opt_init_args_register
 
 from .integrator import Integrator
+from ...system import Molecule
 
-_brownian_integrator = ops.MultitypeFuncGraph("brownian_integrator")
-
-
-@_brownian_integrator.register("Function", "Tensor", "Tensor", "Tensor", "Tensor", "Tensor", "Tensor")
-def _step_integrate(normal, force_scale, random_scale, step, gradients, inv_sqrt_mass, r_cur):
-    """Apply sgd optimizer to the weight parameter using Tensor."""
-    success = True
-
-    dr_force = -gradients * force_scale * inv_sqrt_mass * inv_sqrt_mass
-    dr_random = normal(r_cur.shape) * random_scale * inv_sqrt_mass
-
-    r_new = r_cur + dr_force + dr_random
-
-    success = F.depend(success, F.assign(r_cur, r_new))
-    success = F.depend(success, F.assign(step, step + 1))
-    return success
-
+__all__ = [
+    'Brownian',
+]
 
 class Brownian(Integrator):
-    """brownian"""
-    @opt_init_args_register
-    def __init__(
-            self,
-            system,
-            time_step=1e-3,
-            temp_target=300,
-            coupling_time=2,
-            weight_decay=0.0,
-            loss_scale=1.0,
-    ):
+    r"""Brownian integrator.
+
+    Args:
+
+        system (Molecule):              Simulation system
+
+        temperature (float):            Simulation temperature T (K). Default: 300
+
+        friction_coefficient (float):   Friction coefficient g (amu/ps). Default: 1e3
+
+    """
+    def __init__(self,
+                 system: Molecule,
+                 temperature: float = 300,
+                 friction_coefficient: float = 1e3,
+                 ):
+
         super().__init__(
             system=system,
-            time_step=time_step,
-            coupling_time=coupling_time,
-            weight_decay=weight_decay,
-            loss_scale=loss_scale,
+            thermostat=None,
+            barostat=None,
+            constraint=None,
         )
 
-        self.temp_sampler.set_temperature(temp_target)
-        self.temp_target = self.temp_sampler.temperature.reshape(-1, 1)
+        self.ref_temp = Tensor(temperature, ms.float32)
 
-        self.inv_sqrt_mass = self.system.inv_sqrt_mass
+        self.inv_sqrt_mass = F.sqrt(self._inv_mass)
 
+        self.friction_coefficient = Tensor(friction_coefficient, ms.float32)
         # \gamma = 1.0 / \tau_t
-        friction_coefficient = 1.0 / self.coupling_time
-        self.friction_coefficient = Parameter(friction_coefficient, name='friction_coefficient', requires_grad=False)
-
-        # dt / \gamma
-        force_scale = self.time_step / self.friction_coefficient * self.acc_unit_scale
-        self.force_scale = Parameter(force_scale, name='force_scale', requires_grad=False)
+        self.inv_gamma = msnp.reciprocal(self.friction_coefficient) * self._inv_mass
 
         # k = \sqrt(2 * k_B * T * dt / \gamma)
-        random_scale = F.sqrt(2 * self.boltzmann * self.temp_target * force_scale)
-        self.random_scale = Parameter(random_scale.reshape(-1, 1), name='random_scale', requires_grad=False)
+        self.random_scale = F.sqrt(2 * self.boltzmann * self.ref_temp * self.time_step
+                                   * self.inv_gamma / self.kinetic_unit_scale)
 
         self.normal = ops.StandardNormal()
 
@@ -81,14 +81,46 @@ class Brownian(Integrator):
         self.concat_penulti = ops.Concat(axis=-2)
         self.keep_mean = ops.ReduceMean(keep_dims=True)
 
-    def construct(self, gradients):
-        r_cur = self.coordinates
-        gradients = self.decay_weight(gradients)
-        gradients = self.scale_grad(gradients)
-        inv_sqrt_mass = self.inv_sqrt_mass
+    @property
+    def temperature(self) -> Tensor:
+        return self.ref_temp
 
-        success = self.map_(
-            F.partial(_brownian_integrator, self.normal, self.force_scale, self.random_scale, self.step),
-            gradients, inv_sqrt_mass, r_cur)
+    def set_thermostat(self, thermostat: None = None):
+        """set thermostat algorithm for integrator"""
+        if thermostat is not None:
+            raise ValueError('The Brownian integrator cannot accept thermostat')
+        return self
 
-        return success
+    def set_barostat(self, barostat: None = None):
+        """set barostat algorithm for integrator"""
+        if barostat is not None:
+            raise ValueError('The Brownian integrator cannot accept barostat')
+        return self
+
+    def set_constraint(self, constraint: None = None):
+        """set constraint algorithm for integrator"""
+        if constraint is not None:
+            raise ValueError('The Brownian integrator cannot accept constraint')
+        return self
+
+    def set_time_step(self, dt: float):
+        """set simulation time step"""
+        self.time_step = Tensor(dt, ms.float32)
+        self.random_scale = F.sqrt(2 * self.boltzmann * self.ref_temp * self.time_step * self.inv_gamma)
+        return self
+
+    def construct(self,
+                  coordinate: Tensor,
+                  velocity: Tensor,
+                  force: Tensor,
+                  energy: Tensor,
+                  kinetics: Tensor,
+                  virial: Tensor = None,
+                  pbc_box: Tensor = None,
+                  step: int = 0,
+                  ):
+
+        coordinate += self.acc_unit_scale * force * self.inv_gamma * self.time_step
+        coordinate += self.normal(coordinate.shape) * self.random_scale
+
+        return coordinate, velocity, force, energy, kinetics, virial, pbc_box
