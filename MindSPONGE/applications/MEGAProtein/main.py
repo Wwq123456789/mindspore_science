@@ -19,7 +19,8 @@ import os
 import time
 import mindspore.context as context
 import mindspore.common.dtype as mstype
-from mindspore import Tensor
+from mindspore import Tensor, Parameter
+from mindspore import load_checkpoint, load_param_into_net
 from mindsponge.cell.initializer import do_keep_cell_fp32
 from mindsponge.common.config_load import load_config
 from mindsponge.common.protein import to_pdb, from_prediction
@@ -31,42 +32,42 @@ parser = argparse.ArgumentParser(description='Inputs for eval.py')
 parser.add_argument('--data_config', help='data process config')
 parser.add_argument('--model_config', help='model config')
 parser.add_argument('--pkl_path', help='processed raw feature path')
+parser.add_argument('--checkpoint_path', help='checkpoint path')
 parser.add_argument('--device_id', default=1, type=int, help='DEVICE_ID')
 parser.add_argument('--mixed_precision', default=1, type=int, help='whether to use mixed precision')
 parser.add_argument('--run_platform', default='Ascend', type=str, help='which platform to use, Ascend or GPU')
-args = parser.parse_args()
+arguments = parser.parse_args()
 
 
 def load_pkl(pickle_path):
+    '''load pkl'''
     f = open(pickle_path, "rb")
     data = pickle.load(f)
     f.close()
     return data
 
 
-if __name__ == "__main__":
-    if args.run_platform == 'Ascend':
-        context.set_context(mode=context.GRAPH_MODE,
-                            device_target="Ascend",
-                            max_device_memory="31GB",
-                            device_id=args.device_id)
-    elif args.run_platform == 'GPU':
-        context.set_context(mode=context.GRAPH_MODE,
-                            device_target="GPU",
-                            max_device_memory="31GB",
-                            device_id=args.device_id,
-                            enable_graph_kernel=True,
-                            graph_kernel_flags="--enable_expand_ops_only=Softmax --enable_cluster_ops_only=Add")
-    else:
-        raise Exception("Only support GPU or Ascend")
+def fold_infer(args):
+    '''mega fold inference'''
     data_cfg = load_config(args.data_config)
     model_cfg = load_config(args.model_config)
     model_cfg.seq_length = data_cfg.eval.crop_size
-    SLICE_KEY = "seq_" + str(model_cfg.seq_length)
-    slice_val = vars(model_cfg.slice)[SLICE_KEY]
+    slice_key = "seq_" + str(model_cfg.seq_length)
+    slice_val = vars(model_cfg.slice)[slice_key]
     model_cfg.slice = slice_val
 
     megafold = MegaFold(model_cfg, mixed_precision=args.mixed_precision)
+    param_dict = load_checkpoint(args.checkpoint_path)
+    new_param_dict = {}
+    for key in param_dict.keys():
+        if 'template_embedding._flat_templates_slice' in key or           \
+           'template_embedding._flag_query_slice' in key or               \
+           'template_embedding.template_embedder.idx_num_block' in key or \
+           'template_embedding.template_embedder.idx_batch_loop' in key:
+            continue
+        else:
+            new_param_dict[key] = Parameter(Tensor(param_dict[key]), name=key)
+    load_param_into_net(megafold, new_param_dict)
     if args.mixed_precision:
         megafold.to_float(mstype.float16)
         do_keep_cell_fp32(megafold)
@@ -86,6 +87,7 @@ if __name__ == "__main__":
             feat_i = [Tensor(x[i]) for x in feat]
             prev_pos, prev_msa_first_row, prev_pair = megafold(*feat_i, prev_pos, prev_msa_first_row, prev_pair)
         t2 = time.time()
+        print("PREDICT {seq_name} cost ", t2 - t1, "s")
         final_atom_positions = prev_pos.asnumpy()[:ori_res_length]
         final_atom_mask = feat[16][0][:ori_res_length]
         unrelaxed_protein = from_prediction(final_atom_positions, final_atom_mask,
@@ -95,3 +97,22 @@ if __name__ == "__main__":
         with open(os.path.join(f'./result/seq_{seq_name}_{model_cfg.seq_length}',
                                f'unrelaxed_model_{seq_name}.pdb'), 'w') as file:
             file.write(pdb_file)
+
+
+if __name__ == "__main__":
+    if args.run_platform == 'Ascend':
+        context.set_context(mode=context.GRAPH_MODE,
+                            device_target="Ascend",
+                            max_device_memory="31GB",
+                            device_id=args.device_id)
+    elif args.run_platform == 'GPU':
+        context.set_context(mode=context.GRAPH_MODE,
+                            device_target="GPU",
+                            max_device_memory="31GB",
+                            device_id=args.device_id,
+                            enable_graph_kernel=True,
+                            graph_kernel_flags="--enable_expand_ops_only=Softmax --enable_cluster_ops_only=Add")
+    else:
+        raise Exception("Only support GPU or Ascend")
+
+    fold_infer(arguments)

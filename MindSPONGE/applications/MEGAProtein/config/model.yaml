@@ -23,7 +23,6 @@ template:
   enabled: True
   embed_torsion_angles: True
   use_template_unit_vector: True
-  slice_num: 0
   attention:
     gating: False
     key_dim: 64
@@ -43,7 +42,6 @@ template:
       orientation: 'per_row'
       shared_dropout: True
       value_dim: 64
-      slice_num: 0
     triangle_attention_ending_node:
       dropout_rate: 0.25
       gating: True
@@ -52,27 +50,23 @@ template:
       orientation: 'per_column'
       shared_dropout: True
       value_dim: 64
-      slice_num: 0
     triangle_multiplication_outgoing:
       dropout_rate: 0.25
       equation: 'ikc,jkc->ijc'
       num_intermediate_channel: 64
       orientation: 'per_row'
       shared_dropout: True
-      slice_num: 0
     triangle_multiplication_incoming:
       dropout_rate: 0.25
       equation: 'kjc,kic->ijc'
       num_intermediate_channel: 64
       orientation: 'per_row'
       shared_dropout: True
-      slice_num: 0
     pair_transition:
       dropout_rate: 0.0
       num_intermediate_factor: 2
       orientation: 'per_row'
       shared_dropout: True
-      slice_num: 0
 evoformer:
   msa_stack_num: 48
   extra_msa_stack_num: 4

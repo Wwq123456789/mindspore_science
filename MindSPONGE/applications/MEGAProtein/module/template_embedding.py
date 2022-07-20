@@ -32,13 +32,14 @@ class TemplatePairStack(nn.Cell):
 
     def __init__(self, config, mixed_precision):
         super(TemplatePairStack, self).__init__()
-        self.config = config
+        self.config = config.template.template_pair_stack
         if mixed_precision:
             self._type = mstype.float16
         else:
             self._type = mstype.float32
         self.num_block = self.config.num_block
         batch_size = 0
+        self.slice = config.slice.template_pair_stack
         start_node_cfg = self.config.triangle_attention_starting_node
         self.triangle_attention_starting_node = TriangleAttention(start_node_cfg.orientation,
                                                                   start_node_cfg.num_head,
@@ -47,7 +48,7 @@ class TemplatePairStack(nn.Cell):
                                                                   start_node_cfg.gating,
                                                                   64,
                                                                   batch_size,
-                                                                  start_node_cfg.slice_num,
+                                                                  self.slice.triangle_attention_starting_node,
                                                                   mixed_precision)
         end_node_cfg = self.config.triangle_attention_ending_node
         self.triangle_attention_ending_node = TriangleAttention(end_node_cfg.orientation,
@@ -57,13 +58,13 @@ class TemplatePairStack(nn.Cell):
                                                                 end_node_cfg.gating,
                                                                 64,
                                                                 batch_size,
-                                                                end_node_cfg.slice_num,
+                                                                self.slice.triangle_attention_ending_node,
                                                                 mixed_precision)
         # Hard Code
         self.pair_transition = Transition(self.config.pair_transition.num_intermediate_factor,
                                           64,
                                           batch_size,
-                                          self.config.pair_transition.slice_num)
+                                          self.slice.pair_transition)
 
         mul_outgoing_cfg = self.config.triangle_multiplication_outgoing
         self.triangle_multiplication_outgoing = TriangleMultiplication(mul_outgoing_cfg.num_intermediate_channel,
@@ -95,7 +96,7 @@ class SingleTemplateEmbedding(nn.Cell):
 
     def __init__(self, config, mixed_precision):
         super(SingleTemplateEmbedding, self).__init__()
-        self.config = config
+        self.config = config.template
         if mixed_precision:
             self._type = mstype.float16
         else:
@@ -110,7 +111,7 @@ class SingleTemplateEmbedding(nn.Cell):
         # if is_training:
         template_layers = nn.CellList()
         for _ in range(self.config.template_pair_stack.num_block):
-            template_pair_stack_block = TemplatePairStack(self.config.template_pair_stack, mixed_precision)
+            template_pair_stack_block = TemplatePairStack(config, mixed_precision)
             template_layers.append(template_pair_stack_block)
         self.template_pair_stack = template_layers
 
@@ -120,7 +121,6 @@ class SingleTemplateEmbedding(nn.Cell):
         self.use_template_unit_vector = self.config.use_template_unit_vector
         layer_norm_dim = 64
         self.output_layer_norm = nn.LayerNorm([layer_norm_dim,], epsilon=1e-5)
-        self.zeros = Tensor(0, mstype.int32)
         self.num_block = self.config.template_pair_stack.num_block
         self.batch_block = 4
 
@@ -193,13 +193,13 @@ class TemplateEmbedding(nn.Cell):
 
     def __init__(self, config, seq_len, mixed_precision=True):
         super(TemplateEmbedding, self).__init__()
-        self.config = config
+        self.config = config.template
         if mixed_precision:
             self._type = mstype.float16
         else:
             self._type = mstype.float32
         self.num_channels = (self.config.template_pair_stack.triangle_attention_ending_node.value_dim)
-        self.template_embedder = SingleTemplateEmbedding(self.config, mixed_precision)
+        self.template_embedder = SingleTemplateEmbedding(config, mixed_precision)
         self.template_pointwise_attention = Attention(self.config.attention.num_head,
                                                       self.config.attention.key_dim,
                                                       self.config.attention.value_dim,
@@ -207,7 +207,7 @@ class TemplateEmbedding(nn.Cell):
                                                       q_data_dim=128, m_data_dim=64,
                                                       output_dim=128, batch_size=None,
                                                       mixed_precision=mixed_precision)
-        self.slice_num = self.config.slice_num
+        self.slice_num = config.slice.template_embedding
         if self.slice_num == 0:
             slice_num = 1
         self._flat_query_slice = Parameter(
