@@ -87,7 +87,7 @@ def fold_infer(args):
             feat_i = [Tensor(x[i]) for x in feat]
             prev_pos, prev_msa_first_row, prev_pair = megafold(*feat_i, prev_pos, prev_msa_first_row, prev_pair)
         t2 = time.time()
-        print("PREDICT {seq_name} cost ", t2 - t1, "s")
+        print("predict time ", t2 - t1, "s")
         final_atom_positions = prev_pos.asnumpy()[:ori_res_length]
         final_atom_mask = feat[16][0][:ori_res_length]
         unrelaxed_protein = from_prediction(final_atom_positions, final_atom_mask,
@@ -100,16 +100,16 @@ def fold_infer(args):
 
 
 if __name__ == "__main__":
-    if args.run_platform == 'Ascend':
+    if arguments.run_platform == 'Ascend':
         context.set_context(mode=context.GRAPH_MODE,
                             device_target="Ascend",
                             max_device_memory="31GB",
-                            device_id=args.device_id)
-    elif args.run_platform == 'GPU':
+                            device_id=arguments.device_id)
+    elif arguments.run_platform == 'GPU':
         context.set_context(mode=context.GRAPH_MODE,
                             device_target="GPU",
                             max_device_memory="31GB",
-                            device_id=args.device_id,
+                            device_id=arguments.device_id,
                             enable_graph_kernel=True,
                             graph_kernel_flags="--enable_expand_ops_only=Softmax --enable_cluster_ops_only=Add")
     else:
