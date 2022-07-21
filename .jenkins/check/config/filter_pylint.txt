@@ -75,5 +75,7 @@
 "mindscience/MindSPONGE/mindsponge/python/data/pdb_parser.py"                               "invalid-name"
 "mindscience/MindSPONGE/mindsponge/python/control/integrator/brownian.py"              "unexpected-keyword-arg"
 "mindscience/MindSPONGE/mindsponge/python/data/pdb_parser.py"                               "unused-import"
-"mindscience/MindSPONGE/applications/structure_prediction/model.py"                        "unused-variable"
+"mindscience/MindSPONGE/applications/MEGAProtein/model/fold.py"                        "unused-variable"
+"mindscience/MindSPONGE/applications/MEGAProtein/main.py"                              "redefined-outer-name"
+"mindscience/MindSPONGE/applications/MEGAProtein/main.py"                              "invalid-name"
 "mindscience/MindSPONGE/mindsponge/python/cell/initializer.py"                         "protected-access"
