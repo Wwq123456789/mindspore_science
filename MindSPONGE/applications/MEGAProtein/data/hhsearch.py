@@ -23,7 +23,7 @@ import subprocess
 
 from absl import logging
 
-from data.utils import tmpdir_manager
+from mindsponge.data.utils import tmpdir_manager, timing
 
 
 class HHSearch:

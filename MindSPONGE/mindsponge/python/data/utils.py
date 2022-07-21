@@ -13,28 +13,42 @@
 # limitations under the License.
 # ============================================================================
 """
-utils module used for timing analysing.
+utils module used for timing analysing and tmpdir generation eg.
 """
 
 import contextlib
+import tempfile
+import shutil
 import time
 
+from typing import Optional, Sequence
 from absl import logging
 
 
 @contextlib.contextmanager
-def timing(msg: str):
-    """Context manager that count the time passed of the target function.
-    for example:
-        with timing("count to 10000"):
-            do something here (assume cost 3 seconds)
-    then there would be log info:
-        Started count to 100000
-        Finished count to 10000 in 3.000 seconds
-    """
+def tmpdir_manager(base_dir: Optional[str] = None):
+    """Context manager that deletes a temporary directory on exit."""
+    tmpdir = tempfile.mkdtemp(dir=base_dir)
+    try:
+        yield tmpdir
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
+
+@contextlib.contextmanager
+def timing(msg: str):
     logging.info('Started %s', msg)
     tic = time.time()
     yield
     toc = time.time()
     logging.info('Finished %s in %.3f seconds', msg, toc - tic)
+
+
+def to_a3m(sequences: Sequence[str]) -> str:
+    """Converts sequences to an a3m file."""
+    names = ['sequence %d' % i for i in range(1, len(sequences) + 1)]
+    a3m = []
+    for sequence, name in zip(sequences, names):
+        a3m.append(u'>' + name + u'\n')
+        a3m.append(sequence + u'\n')
+    return ''.join(a3m)
