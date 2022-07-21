@@ -13,28 +13,28 @@
 # limitations under the License.
 # ============================================================================
 """
-utils module used for timing analysing.
+utils module used for tmpdir generation.
 """
 
 import contextlib
-import time
-
-from absl import logging
+import tempfile
+import shutil
 
 
 @contextlib.contextmanager
-def timing(msg: str):
-    """Context manager that count the time passed of the target function.
+def tmpdir_manager(base_dir: str):
+    """Context manager that deletes a temporary directory on exit.
     for example:
-        with timing("count to 10000"):
-            do something here (assume cost 3 seconds)
-    then there would be log info:
-        Started count to 100000
-        Finished count to 10000 in 3.000 seconds
+        with tmpdir_manager(base_dir='/tmp') as tmp_dir:
+            test_file = os.path.join(tmp_dir, 'input.fasta')
+            with open(test_file, "w") as f:
+               f.write("this is a test. \n")
+            print("exit")
+    this would create a tmp data directory and when finished the main process of writing "this is a test. \n" into
+    the tmp file,(after print "exit"), the system would destroy the previous tmp dir
     """
-
-    logging.info('Started %s', msg)
-    tic = time.time()
-    yield
-    toc = time.time()
-    logging.info('Finished %s in %.3f seconds', msg, toc - tic)
+    tmpdir = tempfile.mkdtemp(dir=base_dir)
+    try:
+        yield tmpdir
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
