@@ -18,7 +18,7 @@ from mindsponge.common.residue_constants import chi_angles_mask, chi_pi_periodic
  restype_1to3, chi_angles_atoms, atom_order, residue_atom_renaming_swaps, restype_3to1, \
  MAP_HHBLITS_AATYPE_TO_OUR_AATYPE, restype_order, restypes, \
  restype_name_to_atom14_names, atom_types, residue_atoms
-import mindsponge.common.r3 as r3
+import mindsponge.common.geometry as geometry
 
 MS_MIN32 = -2147483648
 MS_MAX32 = 2147483647
@@ -435,16 +435,13 @@ def atom37_to_torsion_angles(
          chis_mask
          ], axis=2)
 
-    torsion_frames = r3.rigids_from_3_points(
-        point_on_neg_x_axis=r3.vecs_from_tensor(torsions_atom_pos_padding[:, :, :, 1, :]),
-        origin=r3.vecs_from_tensor(torsions_atom_pos_padding[:, :, :, 2, :]),
-        point_on_xy_plane=r3.vecs_from_tensor(torsions_atom_pos_padding[:, :, :, 0, :]),
-        use_numpy=True)
-    rots, trans = r3.invert_rigids(torsion_frames[0], torsion_frames[1], use_numpy=True)
-    forth_atom_rel_pos = r3.rigids_mul_vecs(
-        rots, trans,
-        r3.vecs_from_tensor(torsions_atom_pos_padding[:, :, :, 3, :]),
-        use_numpy=True)
+    torsion_frames = geometry.rigids_from_3_points(
+        point_on_neg_x_axis=geometry.vecs_from_tensor(torsions_atom_pos_padding[:, :, :, 1, :]),
+        origin=geometry.vecs_from_tensor(torsions_atom_pos_padding[:, :, :, 2, :]),
+        point_on_xy_plane=geometry.vecs_from_tensor(torsions_atom_pos_padding[:, :, :, 0, :]))
+    inv_torsion_frames = geometry.invert_rigids(torsion_frames)
+    vecs = geometry.vecs_from_tensor(torsions_atom_pos_padding[:, :, :, 3, :])
+    forth_atom_rel_pos = geometry.rigids_mul_vecs(inv_torsion_frames, vecs)
 
     torsion_angles_sin_cos = np.stack(
         [forth_atom_rel_pos[2], forth_atom_rel_pos[1]], axis=-1)
@@ -525,12 +522,10 @@ def atom37_to_frames(
         rigid_group_atom37_idx_residx,
         batch_dims=1)
 
-    gt_frames = r3.rigids_from_3_points(
-        point_on_neg_x_axis=r3.vecs_from_tensor(base_atom_pos[:, :, 0, :]),
-        origin=r3.vecs_from_tensor(base_atom_pos[:, :, 1, :]),
-        point_on_xy_plane=r3.vecs_from_tensor(base_atom_pos[:, :, 2, :]),
-        use_numpy=True
-    )
+    gt_frames = geometry.rigids_from_3_points(
+        point_on_neg_x_axis=geometry.vecs_from_tensor(base_atom_pos[:, :, 0, :]),
+        origin=geometry.vecs_from_tensor(base_atom_pos[:, :, 1, :]),
+        point_on_xy_plane=geometry.vecs_from_tensor(base_atom_pos[:, :, 2, :]))
 
     # get the group mask
     group_masks = np_gather_ops(rigid_group_mask_res, flat_aatype)
@@ -545,7 +540,7 @@ def atom37_to_frames(
     rotations = np.tile(np.eye(3, dtype=np.float32), [8, 1, 1])
     rotations[0, 0, 0] = -1
     rotations[0, 2, 2] = -1
-    gt_frames = r3.rigids_mul_rots(gt_frames, r3.rots_from_tensor3x3(rotations), use_numpy=True)
+    gt_frames = geometry.rigids_mul_rots(gt_frames, geometry.rots_from_tensor(rotations, use_numpy=True))
 
     rigid_group_is_ambiguous_res = np.zeros([21, 8], dtype=np.float32)
     rigid_group_rotations_res = np.tile(np.eye(3, dtype=np.float32), [21, 8, 1, 1])
@@ -564,12 +559,11 @@ def atom37_to_frames(
         rigid_group_rotations_res, flat_aatype)
 
     # Create the alternative ground truth frames.
-    alt_gt_frames = r3.rigids_mul_rots(
-        gt_frames, r3.rots_from_tensor3x3(rigid_group_ambiguity_rotation_res_index), use_numpy=True)
+    alt_gt_frames = geometry.rigids_mul_rots(
+        gt_frames, geometry.rots_from_tensor(rigid_group_ambiguity_rotation_res_index, use_numpy=True))
 
-    gt_frames_flat12 = r3.rigids_to_tensor_flat12(gt_frames)
-    alt_gt_frames_flat12 = r3.rigids_to_tensor_flat12(alt_gt_frames)
-
+    gt_frames_flat12 = np.stack(list(gt_frames[0]) + list(gt_frames[1]), axis=-1)
+    alt_gt_frames_flat12 = np.stack(list(alt_gt_frames[0]) + list(alt_gt_frames[1]), axis=-1)
     # reshape back to original residue layout
     gt_frames_flat12 = np.reshape(gt_frames_flat12, aatype_shape + (8, 12))
     gt_masks = np.reshape(gt_masks, aatype_shape + (8,))

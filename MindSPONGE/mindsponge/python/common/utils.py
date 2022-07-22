@@ -22,7 +22,7 @@ import mindspore.numpy as mnp
 from mindspore.ops import operations as P
 from scipy.special import softmax
 
-from . import r3
+from . import geometry
 from . import residue_constants, protein
 
 
@@ -67,20 +67,6 @@ def dgram_from_positions(positions, num_bins, min_bin, max_bin):
                                        mnp.expand_dims(positions, axis=-3)), axis=-1, keepdims=True)
     dgram = ((dist2 > lower_breaks).astype(mnp.float32) * (dist2 < upper_breaks).astype(mnp.float32))
     return dgram
-
-
-def mask_mean(mask, value, axis=0, drop_mask_channel=False, eps=1e-10):
-    """Masked mean."""
-    if drop_mask_channel:
-        mask = mask[..., 0]
-    mask_shape = mask.shape
-    value_shape = value.shape
-    broadcast_factor = 1.
-    value_size = value_shape[axis]
-    mask_size = mask_shape[axis]
-    if mask_size == 1:
-        broadcast_factor *= value_size
-    return mnp.sum(mask * value, axis=axis) / (mnp.sum(mask, axis=axis) * broadcast_factor + eps)
 
 
 def atom37_to_torsion_angles(
@@ -175,15 +161,15 @@ def atom37_to_torsion_angles(
                                            psi_mask[:, :, None],
                                            chis_mask], axis=2)
 
-    torsion_frames_rots, torsion_frames_trans = r3.rigids_from_3_points(
-        torsions_atom_pos[:, :, :, 1, :],
-        torsions_atom_pos[:, :, :, 2, :],
-        torsions_atom_pos[:, :, :, 0, :])
-    inv_torsion_rots, inv_torsion_trans = r3.invert_rigids(torsion_frames_rots, torsion_frames_trans)
-    forth_atom_rel_pos = r3.rigids_mul_vecs(inv_torsion_rots, inv_torsion_trans, torsions_atom_pos[:, :, :, 3, :])
-
+    torsion_rigid = geometry.rigids_from_3_points(
+        geometry.vecs_from_tensor(torsions_atom_pos[:, :, :, 1, :]),
+        geometry.vecs_from_tensor(torsions_atom_pos[:, :, :, 2, :]),
+        geometry.vecs_from_tensor(torsions_atom_pos[:, :, :, 0, :]))
+    inv_torsion_rigid = geometry.invert_rigids(torsion_rigid)
+    forth_atom_rel_pos = geometry.rigids_mul_vecs(inv_torsion_rigid,
+                                                  geometry.vecs_from_tensor(torsions_atom_pos[:, :, :, 3, :]))
     # Compute the position of the forth atom in this frame (y and z coordinate
-    torsion_angles_sin_cos = mnp.stack([forth_atom_rel_pos[..., 2], forth_atom_rel_pos[..., 1]], axis=-1)
+    torsion_angles_sin_cos = mnp.stack([forth_atom_rel_pos[2], forth_atom_rel_pos[1]], axis=-1)
     torsion_angles_sin_cos /= mnp.sqrt(mnp.sum(mnp.square(torsion_angles_sin_cos), axis=-1, keepdims=True) + 1e-8)
     # Mirror psi, because we computed it from the Oxygen-atom.
     torsion_angles_sin_cos *= mirror_psi_mask
@@ -191,32 +177,6 @@ def atom37_to_torsion_angles(
     mirror_torsion_angles = mnp.concatenate([mnp.ones([num_batch, num_res, 3]), 1.0 - 2.0 * chi_is_ambiguous], axis=-1)
     alt_torsion_angles_sin_cos = (torsion_angles_sin_cos * mirror_torsion_angles[:, :, :, None])
     return torsion_angles_sin_cos, alt_torsion_angles_sin_cos, torsion_angles_mask
-
-
-def get_chi_atom_indices():
-    """Returns atom indices needed to compute chi angles for all residue types.
-
-  Returns:
-    A tensor of shape [residue_types=21, chis=4, atoms=4]. The residue types are
-    in the order specified in residue_constants.restypes + unknown residue type
-    at the end. For chi angles which are not defined on the residue, the
-    positions indices are by default set to 0.
-  """
-    chi_atom_indices = []
-    for residue_name in residue_constants.restypes:
-        residue_name = residue_constants.restype_1to3[residue_name]
-        residue_chi_angles = residue_constants.chi_angles_atoms[residue_name]
-        atom_indices = []
-        for chi_angle in residue_chi_angles:
-            atom_indices.append(
-                [residue_constants.atom_order[atom] for atom in chi_angle])
-        for _ in range(4 - len(atom_indices)):
-            atom_indices.append([0, 0, 0, 0])  # For chi angles not defined on the AA.
-        chi_atom_indices.append(atom_indices)
-
-    chi_atom_indices.append([[0, 0, 0, 0]] * 4)  # For UNKNOWN residue.
-
-    return np.array(chi_atom_indices).astype(np.int32)
 
 
 def rigids_from_tensor4x4(m):
@@ -229,8 +189,12 @@ def rigids_from_tensor4x4(m):
     Returns:
     Rigids object corresponding to transformations m
     """
-    return m[..., 0, 0], m[..., 0, 1], m[..., 0, 2], m[..., 1, 0], m[..., 1, 1], m[..., 1, 2], m[..., 2, 0], \
-           m[..., 2, 1], m[..., 2, 2], m[..., 0, 3], m[..., 1, 3], m[..., 2, 3]
+    rotation = (m[..., 0, 0], m[..., 0, 1], m[..., 0, 2],
+                m[..., 1, 0], m[..., 1, 1], m[..., 1, 2],
+                m[..., 2, 0], m[..., 2, 1], m[..., 2, 2])
+    trans = (m[..., 0, 3], m[..., 1, 3], m[..., 2, 3])
+    rigid = (rotation, trans)
+    return rigid
 
 
 def frames_and_literature_positions_to_atom14_pos(aatype, all_frames_to_global, restype_atom14_to_rigid_group,
@@ -250,143 +214,46 @@ def frames_and_literature_positions_to_atom14_pos(aatype, all_frames_to_global, 
     residx_to_group_idx = P.Gather()(restype_atom14_to_rigid_group, aatype, 0)
     group_mask = nn.OneHot(depth=8, axis=-1)(residx_to_group_idx)
 
-    # # r3.Rigids with shape (N, 14)
+    # Rigids with shape (N, 14)
     map_atoms_to_global = map_atoms_to_global_func(all_frames_to_global, group_mask)
 
     # Gather the literature atom positions for each residue.
-    # r3.Vecs with shape (N, 14)
-    lit_positions = vecs_from_tensor(P.Gather()(restype_atom14_rigid_group_positions, aatype, 0))
+    # Vecs with shape (N, 14)
+    lit_positions = geometry.vecs_from_tensor(P.Gather()(restype_atom14_rigid_group_positions, aatype, 0))
 
     # Transform each atom from its local frame to the global frame.
-    # r3.Vecs with shape (N, 14)
-    pred_positions = rigids_mul_vecs(map_atoms_to_global, lit_positions)
+    # Vecs with shape (N, 14)
+    pred_positions = geometry.rigids_mul_vecs(map_atoms_to_global, lit_positions)
 
     # Mask out non-existing atoms.
     mask = P.Gather()(restype_atom14_mask, aatype, 0)
 
-    pred_positions = pred_map_mul(pred_positions, mask)
+    pred_positions = geometry.vecs_scale(pred_positions, mask)
 
     return pred_positions
 
 
-def pred_map_mul(pred_positions, mask):
-    return [pred_positions[0] * mask,
-            pred_positions[1] * mask,
-            pred_positions[2] * mask]
-
-
-def rots_mul_vecs(m, v):
-    """Apply rotations 'm' to vectors 'v'."""
-
-    return [m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
-            m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
-            m[6] * v[0] + m[7] * v[1] + m[8] * v[2]]
-
-
-def rigids_mul_vecs(r, v):
-    """Apply rigid transforms 'r' to points 'v'."""
-
-    rots = rots_mul_vecs(r, v)
-    vecs_add_r = [rots[0] + r[9],
-                  rots[1] + r[10],
-                  rots[2] + r[11]]
-    return vecs_add_r
-
-
-def vecs_from_tensor(x):  # shape (...)
-    """Converts from tensor of shape (3,) to Vecs."""
-    return x[..., 0], x[..., 1], x[..., 2]
-
-
-def get_exp_atom_pos(atom_pos):
-    return [mnp.expand_dims(atom_pos[0], axis=0),
-            mnp.expand_dims(atom_pos[1], axis=0),
-            mnp.expand_dims(atom_pos[2], axis=0)
-           ]
-
-
-def quat_multiply_by_vec(quat, vec):
-    """Multiply a quaternion by a pure-vector quaternion."""
-
-    return mnp.sum(residue_constants.QUAT_MULTIPLY_BY_VEC * quat[..., :, None, None] * vec[..., None, :, None],
-                   axis=(-3, -2))
-
-
-def rigids_mul_rots(xx, xy, xz, yx, yy, yz, zx, zy, zz, ones, zeros, cos_angles, sin_angles):
-    """Compose rigid transformations 'r' with rotations 'm'."""
-
-    c00 = xx * ones + xy * zeros + xz * zeros
-    c01 = yx * ones + yy * zeros + yz * zeros
-    c02 = zx * ones + zy * zeros + zz * zeros
-    c10 = xx * zeros + xy * cos_angles + xz * sin_angles
-    c11 = yx * zeros + yy * cos_angles + yz * sin_angles
-    c12 = zx * zeros + zy * cos_angles + zz * sin_angles
-    c20 = xx * zeros + xy * (-sin_angles) + xz * cos_angles
-    c21 = yx * zeros + yy * (-sin_angles) + yz * cos_angles
-    c22 = zx * zeros + zy * (-sin_angles) + zz * cos_angles
-    return c00, c10, c20, c01, c11, c21, c02, c12, c22
-
-
-def rigids_mul_rigids(a, b):
-    """Group composition of Rigids 'a' and 'b'."""
-
-    c00 = a[0] * b[0] + a[1] * b[3] + a[2] * b[6]
-    c01 = a[3] * b[0] + a[4] * b[3] + a[5] * b[6]
-    c02 = a[6] * b[0] + a[7] * b[3] + a[8] * b[6]
-
-    c10 = a[0] * b[1] + a[1] * b[4] + a[2] * b[7]
-    c11 = a[3] * b[1] + a[4] * b[4] + a[5] * b[7]
-    c12 = a[6] * b[1] + a[7] * b[4] + a[8] * b[7]
-
-    c20 = a[0] * b[2] + a[1] * b[5] + a[2] * b[8]
-    c21 = a[3] * b[2] + a[4] * b[5] + a[5] * b[8]
-    c22 = a[6] * b[2] + a[7] * b[5] + a[8] * b[8]
-
-    tr0 = a[0] * b[9] + a[1] * b[10] + a[2] * b[11]
-    tr1 = a[3] * b[9] + a[4] * b[10] + a[5] * b[11]
-    tr2 = a[6] * b[9] + a[7] * b[10] + a[8] * b[11]
-
-    new_tr0 = a[9] + tr0
-    new_tr1 = a[10] + tr1
-    new_tr2 = a[11] + tr2
-
-    return [c00, c10, c20, c01, c11, c21, c02, c12, c22, new_tr0, new_tr1, new_tr2]
-
-
-def rigits_concate_all(xall, x5, x6, x7):
-    return [mnp.concatenate([xall[0][:, 0:5], x5[0][:, None], x6[0][:, None], x7[0][:, None]], axis=-1),
-            mnp.concatenate([xall[1][:, 0:5], x5[1][:, None], x6[1][:, None], x7[1][:, None]], axis=-1),
-            mnp.concatenate([xall[2][:, 0:5], x5[2][:, None], x6[2][:, None], x7[2][:, None]], axis=-1),
-            mnp.concatenate([xall[3][:, 0:5], x5[3][:, None], x6[3][:, None], x7[3][:, None]], axis=-1),
-            mnp.concatenate([xall[4][:, 0:5], x5[4][:, None], x6[4][:, None], x7[4][:, None]], axis=-1),
-            mnp.concatenate([xall[5][:, 0:5], x5[5][:, None], x6[5][:, None], x7[5][:, None]], axis=-1),
-            mnp.concatenate([xall[6][:, 0:5], x5[6][:, None], x6[6][:, None], x7[6][:, None]], axis=-1),
-            mnp.concatenate([xall[7][:, 0:5], x5[7][:, None], x6[7][:, None], x7[7][:, None]], axis=-1),
-            mnp.concatenate([xall[8][:, 0:5], x5[8][:, None], x6[8][:, None], x7[8][:, None]], axis=-1),
-            mnp.concatenate([xall[9][:, 0:5], x5[9][:, None], x6[9][:, None], x7[9][:, None]], axis=-1),
-            mnp.concatenate([xall[10][:, 0:5], x5[10][:, None], x6[10][:, None], x7[10][:, None]], axis=-1),
-            mnp.concatenate([xall[11][:, 0:5], x5[11][:, None], x6[11][:, None], x7[11][:, None]], axis=-1)
-           ]
-
-
-def reshape_back(backb):
-    return [backb[0][:, None],
-            backb[1][:, None],
-            backb[2][:, None],
-            backb[3][:, None],
-            backb[4][:, None],
-            backb[5][:, None],
-            backb[6][:, None],
-            backb[7][:, None],
-            backb[8][:, None],
-            backb[9][:, None],
-            backb[10][:, None],
-            backb[11][:, None]
-           ]
-
-
-def l2_normalize(x, axis=-1):
-    return x / mnp.sqrt(mnp.sum(x ** 2, axis=axis, keepdims=True))
+def rigids_concate_all(xall, x5, x6, x7):
+    """rigids concate all"""
+    x5 = (geometry.rots_expend_dims(x5[0], -1), geometry.vecs_expend_dims(x5[1], -1))
+    x6 = (geometry.rots_expend_dims(x6[0], -1), geometry.vecs_expend_dims(x6[1], -1))
+    x7 = (geometry.rots_expend_dims(x7[0], -1), geometry.vecs_expend_dims(x7[1], -1))
+    xall_rot = xall[0]
+    xall_rot_slice = []
+    for val in xall_rot:
+        xall_rot_slice.append(val[:, 0:5])
+    xall_trans = xall[1]
+    xall_trans_slice = []
+    for val in xall_trans:
+        xall_trans_slice.append(val[:, 0:5])
+    xall = (xall_rot_slice, xall_trans_slice)
+    res_rot = []
+    for i in range(9):
+        res_rot.append(mnp.concatenate((xall[0][i], x5[0][i], x6[0][i], x7[0][i]), axis=-1))
+    res_trans = []
+    for i in range(3):
+        res_trans.append(mnp.concatenate((xall[1][i], x5[1][i], x6[1][i], x7[1][i]), axis=-1))
+    return (res_rot, res_trans)
 
 
 def torsion_angles_to_frames(aatype, backb_to_global, torsion_angles_sin_cos, restype_rigid_group_default_frame):
@@ -395,7 +262,7 @@ def torsion_angles_to_frames(aatype, backb_to_global, torsion_angles_sin_cos, re
     # Gather the default frames for all rigid groups.
     m = P.Gather()(restype_rigid_group_default_frame, aatype, 0)
 
-    xx1, xy1, xz1, yx1, yy1, yz1, zx1, zy1, zz1, x1, y1, z1 = rigids_from_tensor4x4(m)
+    default_frames = rigids_from_tensor4x4(m)
 
     # Create the rotation matrices according to the given angles (each frame is
     # defined such that its rotation is around the x-axis).
@@ -408,71 +275,62 @@ def torsion_angles_to_frames(aatype, backb_to_global, torsion_angles_sin_cos, re
     cos_angles = mnp.concatenate([mnp.ones([num_residues, 1]), cos_angles], axis=-1)
     zeros = mnp.zeros_like(sin_angles)
     ones = mnp.ones_like(sin_angles)
+
+    all_rots = (ones, zeros, zeros,
+                zeros, cos_angles, -sin_angles,
+                zeros, sin_angles, cos_angles)
+
     # Apply rotations to the frames.
-    xx2, xy2, xz2, yx2, yy2, yz2, zx2, zy2, zz2 = rigids_mul_rots(xx1, xy1, xz1, yx1, yy1, yz1, zx1, zy1, zz1,
-                                                                  ones, zeros, cos_angles, sin_angles)
-    all_frames = [xx2, xy2, xz2, yx2, yy2, yz2, zx2, zy2, zz2, x1, y1, z1]
+    all_frames = geometry.rigids_mul_rots(default_frames, all_rots)
     # chi2, chi3, and chi4 frames do not transform to the backbone frame but to
     # the previous frame. So chain them up accordingly.
-    chi2_frame_to_frame = [xx2[:, 5], xy2[:, 5], xz2[:, 5], yx2[:, 5], yy2[:, 5], yz2[:, 5], zx2[:, 5], zy2[:, 5],
-                           zz2[:, 5], x1[:, 5], y1[:, 5], z1[:, 5]]
-    chi3_frame_to_frame = [xx2[:, 6], xy2[:, 6], xz2[:, 6], yx2[:, 6], yy2[:, 6], yz2[:, 6], zx2[:, 6], zy2[:, 6],
-                           zz2[:, 6], x1[:, 6], y1[:, 6], z1[:, 6]]
-    chi4_frame_to_frame = [xx2[:, 7], xy2[:, 7], xz2[:, 7], yx2[:, 7], yy2[:, 7], yz2[:, 7], zx2[:, 7], zy2[:, 7],
-                           zz2[:, 7], x1[:, 7], y1[:, 7], z1[:, 7]]
-    #
-    chi1_frame_to_backb = [xx2[:, 4], xy2[:, 4], xz2[:, 4], yx2[:, 4], yy2[:, 4], yz2[:, 4], zx2[:, 4], zy2[:, 4],
-                           zz2[:, 4], x1[:, 4], y1[:, 4], z1[:, 4]]
+    chi2_frame_to_frame = ((all_frames[0][0][:, 5], all_frames[0][1][:, 5], all_frames[0][2][:, 5],
+                            all_frames[0][3][:, 5], all_frames[0][4][:, 5], all_frames[0][5][:, 5],
+                            all_frames[0][6][:, 5], all_frames[0][7][:, 5], all_frames[0][8][:, 5]),
+                           (all_frames[1][0][:, 5], all_frames[1][1][:, 5], all_frames[1][2][:, 5]))
+    chi3_frame_to_frame = ((all_frames[0][0][:, 6], all_frames[0][1][:, 6], all_frames[0][2][:, 6],
+                            all_frames[0][3][:, 6], all_frames[0][4][:, 6], all_frames[0][5][:, 6],
+                            all_frames[0][6][:, 6], all_frames[0][7][:, 6], all_frames[0][8][:, 6]),
+                           (all_frames[1][0][:, 6], all_frames[1][1][:, 6], all_frames[1][2][:, 6]))
 
-    chi2_frame_to_backb = rigids_mul_rigids(chi1_frame_to_backb, chi2_frame_to_frame)
-    chi3_frame_to_backb = rigids_mul_rigids(chi2_frame_to_backb, chi3_frame_to_frame)
-    chi4_frame_to_backb = rigids_mul_rigids(chi3_frame_to_backb, chi4_frame_to_frame)
+    chi4_frame_to_frame = ((all_frames[0][0][:, 7], all_frames[0][1][:, 7], all_frames[0][2][:, 7],
+                            all_frames[0][3][:, 7], all_frames[0][4][:, 7], all_frames[0][5][:, 7],
+                            all_frames[0][6][:, 7], all_frames[0][7][:, 7], all_frames[0][8][:, 7]),
+                           (all_frames[1][0][:, 7], all_frames[1][1][:, 7], all_frames[1][2][:, 7]))
 
-    # Recombine them to a r3.Rigids with shape (N, 8).
-    all_frames_to_backb = rigits_concate_all(all_frames, chi2_frame_to_backb,
+    chi1_frame_to_backb = ((all_frames[0][0][:, 4], all_frames[0][1][:, 4], all_frames[0][2][:, 4],
+                            all_frames[0][3][:, 4], all_frames[0][4][:, 4], all_frames[0][5][:, 4],
+                            all_frames[0][6][:, 4], all_frames[0][7][:, 4], all_frames[0][8][:, 4]),
+                           (all_frames[1][0][:, 4], all_frames[1][1][:, 4], all_frames[1][2][:, 4]))
+
+    chi2_frame_to_backb = geometry.rigids_mul_rigids(chi1_frame_to_backb, chi2_frame_to_frame)
+    chi3_frame_to_backb = geometry.rigids_mul_rigids(chi2_frame_to_backb, chi3_frame_to_frame)
+    chi4_frame_to_backb = geometry.rigids_mul_rigids(chi3_frame_to_backb, chi4_frame_to_frame)
+
+    # Recombine them to a Rigids with shape (N, 8).
+    all_frames_to_backb = rigids_concate_all(all_frames, chi2_frame_to_backb,
                                              chi3_frame_to_backb, chi4_frame_to_backb)
-    backb_to_global_new = reshape_back(backb_to_global)
+
+    backb_to_global = (geometry.rots_expend_dims(backb_to_global[0], -1),
+                       geometry.vecs_expend_dims(backb_to_global[1], -1))
     # Create the global frames.
-    all_frames_to_global = rigids_mul_rigids(backb_to_global_new, all_frames_to_backb)
+    all_frames_to_global = geometry.rigids_mul_rigids(backb_to_global, all_frames_to_backb)
     return all_frames_to_global
 
 
 def map_atoms_to_global_func(all_frames, group_mask):
-    return [mnp.sum(all_frames[0][:, None, :] * group_mask, axis=-1),
-            mnp.sum(all_frames[1][:, None, :] * group_mask, axis=-1),
-            mnp.sum(all_frames[2][:, None, :] * group_mask, axis=-1),
-            mnp.sum(all_frames[3][:, None, :] * group_mask, axis=-1),
-            mnp.sum(all_frames[4][:, None, :] * group_mask, axis=-1),
-            mnp.sum(all_frames[5][:, None, :] * group_mask, axis=-1),
-            mnp.sum(all_frames[6][:, None, :] * group_mask, axis=-1),
-            mnp.sum(all_frames[7][:, None, :] * group_mask, axis=-1),
-            mnp.sum(all_frames[8][:, None, :] * group_mask, axis=-1),
-            mnp.sum(all_frames[9][:, None, :] * group_mask, axis=-1),
-            mnp.sum(all_frames[10][:, None, :] * group_mask, axis=-1),
-            mnp.sum(all_frames[11][:, None, :] * group_mask, axis=-1)
-           ]
-
-
-def get_exp_frames(frames):
-    return [mnp.expand_dims(frames[0], axis=0),
-            mnp.expand_dims(frames[1], axis=0),
-            mnp.expand_dims(frames[2], axis=0),
-            mnp.expand_dims(frames[3], axis=0),
-            mnp.expand_dims(frames[4], axis=0),
-            mnp.expand_dims(frames[5], axis=0),
-            mnp.expand_dims(frames[6], axis=0),
-            mnp.expand_dims(frames[7], axis=0),
-            mnp.expand_dims(frames[8], axis=0),
-            mnp.expand_dims(frames[9], axis=0),
-            mnp.expand_dims(frames[10], axis=0),
-            mnp.expand_dims(frames[11], axis=0)
-           ]
-
-
-def vecs_to_tensor(v):
-    """Converts 'v' to tensor with shape 3, inverse of 'vecs_from_tensor'."""
-
-    return mnp.stack([v[0], v[1], v[2]], axis=-1)
+    """map atoms to global"""
+    all_frames_rot = all_frames[0]
+    all_frames_trans = all_frames[1]
+    rot = geometry.rots_scale(geometry.rots_expend_dims(all_frames_rot, 1), group_mask)
+    res_rot = []
+    for val in rot:
+        res_rot.append(mnp.sum(val, axis=-1))
+    trans = geometry.vecs_scale(geometry.vecs_expend_dims(all_frames_trans, 1), group_mask)
+    res_trans = []
+    for val in trans:
+        res_trans.append(mnp.sum(val, axis=-1))
+    return (res_rot, res_trans)
 
 
 def atom14_to_atom37(atom14_data, residx_atom37_to_atom14, atom37_atom_exists, indices0):
@@ -671,7 +529,7 @@ def get_pdb_info(pdb_path):
                 'all_atom_mask': atom37_mask}
     atom14_atom_exists, atom14_gt_exists, atom14_gt_positions, residx_atom14_to_atom37, residx_atom37_to_atom14, \
     atom37_atom_exists, atom14_alt_gt_positions, atom14_alt_gt_exists, atom14_atom_is_ambiguous = \
-        make_atom14_positions(aatype, atom37_mask, atom37_positions)
+        make_atom14_positions(aatype, atom37_positions, atom37_mask)
     features.update({"atom14_atom_exists": atom14_atom_exists,
                      "atom14_gt_exists": atom14_gt_exists,
                      "atom14_gt_positions": atom14_gt_positions,
