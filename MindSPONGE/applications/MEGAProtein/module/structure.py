@@ -24,8 +24,9 @@ from mindsponge.cell import InvariantPointAttention
 import mindsponge.common.residue_constants as residue_constants
 from mindsponge.cell.initializer import lecun_init
 from mindsponge.common.utils import torsion_angles_to_frames, frames_and_literature_positions_to_atom14_pos, \
-    vecs_to_tensor, atom14_to_atom37, get_exp_frames, get_exp_atom_pos
-from mindsponge.common.geometry import generate_new_affine, to_tensor, pre_compose, scale_translation
+    atom14_to_atom37
+from mindsponge.common.geometry import initial_affine, quaternion_to_tensor, pre_compose, vecs_scale,\
+        vecs_to_tensor, vecs_expend_dims, rots_expend_dims
 
 
 class MultiRigidSidechain(nn.Cell):
@@ -96,10 +97,10 @@ class MultiRigidSidechain(nn.Cell):
         unnormalized_angles = mnp.reshape(unnormalized_angles, [num_res, 7, 2])
         angles = self.l2_normalize(unnormalized_angles)
 
-        backb_to_global = [rotation[0], rotation[1], rotation[2],
-                           rotation[3], rotation[4], rotation[5],
-                           rotation[6], rotation[7], rotation[8],
-                           translation[0], translation[1], translation[2]]
+        backb_to_global = ((rotation[0], rotation[1], rotation[2],
+                            rotation[3], rotation[4], rotation[5],
+                            rotation[6], rotation[7], rotation[8]),
+                           (translation[0], translation[1], translation[2]))
 
         all_frames_to_global = torsion_angles_to_frames(aatype, backb_to_global, angles,
                                                         self.restype_rigid_group_default_frame)
@@ -169,12 +170,12 @@ class FoldIteration(nn.Cell):
         # Affine update
         affine_update = self.affine_update(act)
         quaternion, rotation, translation = pre_compose(quaternion, rotation, translation, affine_update)
-        translation1 = scale_translation(translation, 10.0)
+        translation1 = vecs_scale(translation, 10.0)
         rotation1 = rotation
         angles_sin_cos, unnormalized_angles_sin_cos, atom_pos, frames = \
             self.mu_side_chain(rotation1, translation1, act, initial_act, aatype)
 
-        affine_output = to_tensor(quaternion, translation)
+        affine_output = quaternion_to_tensor(quaternion, translation)
         quaternion = F.stop_gradient(quaternion)
         rotation = F.stop_gradient(rotation)
         res = (act, quaternion, translation, rotation, affine_output, angles_sin_cos, unnormalized_angles_sin_cos, \
@@ -209,10 +210,9 @@ class StructureModule(nn.Cell):
         act = self.single_layer_norm(single)
         initial_act = act
         act = self.initial_projection(act)
-        quaternion, rotation, translation = generate_new_affine(self.seq_length)
+        quaternion, rotation, translation = initial_affine(self.seq_length)
         act_2d = self.pair_layer_norm(pair)
         # folder iteration
-        # todo 8 iteration
         atom_pos, affine_output_new, angles_sin_cos_new, um_angles_sin_cos_new, sidechain_frames, act_iter = \
             self.iteration_operation(act, act_2d, sequence_mask, quaternion, rotation, translation, initial_act, aatype)
         atom14_pred_positions = vecs_to_tensor(atom_pos)[-1]
@@ -245,12 +245,13 @@ class StructureModule(nn.Cell):
             act, quaternion, translation, rotation, affine_output, angles_sin_cos, unnormalized_angles_sin_cos, \
             atom_pos, frames = \
                 self.fold_iteration(act, act_2d, sequence_mask, quaternion, rotation, translation, initial_act, aatype)
+
             affine_init = affine_init + (affine_output[None, ...],)
             angles_sin_cos_init = angles_sin_cos_init + (angles_sin_cos[None, ...],)
             um_angles_sin_cos_init = um_angles_sin_cos_init + (unnormalized_angles_sin_cos[None, ...],)
-            atom_pos_batch += (mnp.concatenate(get_exp_atom_pos(atom_pos), axis=0)[:, None, ...],)
-            frames_batch += (mnp.concatenate(get_exp_frames(frames), axis=0)[:, None, ...],)
-
+            atom_pos_batch += (mnp.concatenate(vecs_expend_dims(atom_pos, 0), axis=0)[:, None, ...],)
+            frames_batch += (mnp.concatenate(rots_expend_dims(frames[0], 0) +
+                                             vecs_expend_dims(frames[1], 0), axis=0)[:, None, ...],)
         affine_output_new = mnp.concatenate(affine_init, axis=0)
         angles_sin_cos_new = mnp.concatenate(angles_sin_cos_init, axis=0)
         um_angles_sin_cos_new = mnp.concatenate(um_angles_sin_cos_init, axis=0)

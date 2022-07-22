@@ -21,7 +21,8 @@ from mindspore.ops import operations as P
 from mindspore.common.tensor import Tensor
 from mindspore import Parameter
 import mindsponge.common.residue_constants as residue_constants
-from mindsponge.common.utils import pseudo_beta_fn, atom37_to_torsion_angles, get_chi_atom_indices
+from mindsponge.common.utils import pseudo_beta_fn, atom37_to_torsion_angles
+from mindsponge.data.data_transform import get_chi_atom_pos_indices
 from mindsponge.cell.initializer import lecun_init
 from module.template_embedding import TemplateEmbedding
 from module.evoformer import Evoformer
@@ -30,7 +31,7 @@ from module.structure import StructureModule
 
 def caculate_constant_array(seq_length):
     '''constant array'''
-    chi_atom_indices = np.array(get_chi_atom_indices()).astype(np.int32)
+    chi_atom_indices = np.array(get_chi_atom_pos_indices()).astype(np.int32)
     chi_angles_mask = list(residue_constants.chi_angles_mask)
     chi_angles_mask.append([0.0, 0.0, 0.0, 0.0])
     chi_angles_mask = np.array(chi_angles_mask).astype(np.float32)
