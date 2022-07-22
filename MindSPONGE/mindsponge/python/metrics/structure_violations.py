@@ -14,11 +14,11 @@
 # ============================================================================
 """Modules and utilities for the structure module."""
 
-from mindspore import Tensor
-import mindspore.numpy as mnp
-from mindspore.ops import operations as P
 import mindspore as ms
+import mindspore.numpy as mnp
+from mindspore import Tensor
 from mindspore import nn
+from mindspore.ops import operations as P
 
 from ..common import residue_constants
 
@@ -71,7 +71,7 @@ def between_residue_bond(
 
     ca_c_n_cos_angle = mnp.sum(c_ca_unit_vec * c_n_unit_vec, axis=-1)
     gt_angle = residue_constants.between_res_cos_angles_ca_c_n[0]
-    gt_stddev = residue_constants.between_res_bond_length_stddev_c_n[0]
+    gt_stddev = residue_constants.between_res_cos_angles_ca_c_n[1]
     ca_c_n_cos_angle_error = mnp.sqrt(1e-6 + mnp.square(ca_c_n_cos_angle - gt_angle))
     ca_c_n_loss_per_residue = nn.ReLU()(ca_c_n_cos_angle_error - tolerance_factor_soft * gt_stddev)
     mask = this_ca_mask * this_c_mask * next_n_mask * has_no_gap_mask
@@ -167,10 +167,10 @@ def within_residue_violations(
     return per_atom_loss_sum, per_atom_violations
 
 
-def find_structural_violations(atom14_atom_exists, residue_index, aatype, residx_atom14_to_atom37,
-                               atom14_pred_positions, violation_tolerance_factor, clash_overlap_tolerance,
-                               lower_bound, upper_bound, atomtype_radius, c_one_hot, n_one_hot, dists_mask_i,
-                               cys_sg_idx):
+def get_structural_violations(atom14_atom_exists, residue_index, aatype, residx_atom14_to_atom37,
+                              atom14_pred_positions, violation_tolerance_factor, clash_overlap_tolerance,
+                              lower_bound, upper_bound, atomtype_radius, c_one_hot, n_one_hot, dists_mask_i,
+                              cys_sg_idx):
     """Computes several checks for structural violations."""
 
     # Compute between residue backbone violations of bonds and angles.
@@ -226,6 +226,10 @@ def find_structural_violations(atom14_atom_exists, residue_index, aatype, residx
     per_atom_loss_sum = per_atom_loss_sum
     per_atom_violations = per_atom_violations
     total_per_residue_violations_mask = per_residue_violations_mask
+    num_atoms = P.ReduceSum()(atom14_atom_exists.astype(ms.float32))
+    structure_violation_loss = bonds_c_n_loss_mean + angles_ca_c_n_loss_mean + angles_c_n_ca_loss_mean +\
+                               P.ReduceSum()(clashes_per_atom_loss_sum + per_atom_loss_sum) / (1e-6 + num_atoms)
     return (bonds_c_n_loss_mean, angles_ca_c_n_loss_mean, angles_c_n_ca_loss_mean, connections_per_residue_loss_sum,
             connections_per_residue_violation_mask, clashes_mean_loss, clashes_per_atom_loss_sum,
-            clashes_per_atom_clash_mask, per_atom_loss_sum, per_atom_violations, total_per_residue_violations_mask)
+            clashes_per_atom_clash_mask, per_atom_loss_sum, per_atom_violations, total_per_residue_violations_mask,
+            structure_violation_loss)
