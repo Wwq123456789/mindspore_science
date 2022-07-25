@@ -17,7 +17,7 @@ import mindspore as ms
 import mindspore.numpy as mnp
 from mindspore import nn
 from mindspore.ops import operations as P
-from mindsponge.common.geometry import from_tensor
+from mindsponge.common.geometry import quaternion_from_tensor
 from mindsponge.common.utils import find_optimal_renaming
 from ..common import residue_constants
 
@@ -327,18 +327,18 @@ def frame_aligned_point_error_map(pred_frames,
     """
 
     # Compute array of predicted positions in the predicted frames.
-    xx = pred_frames[0]
-    xy = pred_frames[1]
-    xz = pred_frames[2]
-    yx = pred_frames[3]
-    yy = pred_frames[4]
-    yz = pred_frames[5]
-    zx = pred_frames[6]
-    zy = pred_frames[7]
-    zz = pred_frames[8]
-    t0_p = pred_frames[9]
-    t1_p = pred_frames[10]
-    t2_p = pred_frames[11]
+    xx = pred_frames[0][0]
+    xy = pred_frames[0][1]
+    xz = pred_frames[0][2]
+    yx = pred_frames[0][3]
+    yy = pred_frames[0][4]
+    yz = pred_frames[0][5]
+    zx = pred_frames[0][6]
+    zy = pred_frames[0][7]
+    zz = pred_frames[0][8]
+    t0_p = pred_frames[1][0]
+    t1_p = pred_frames[1][1]
+    t2_p = pred_frames[1][2]
     t0 = pred_positions[0]
     t1 = pred_positions[1]
     t2 = pred_positions[2]
@@ -355,18 +355,18 @@ def frame_aligned_point_error_map(pred_frames,
         xz[..., None] * t0[:, None, ...] + yz[..., None] * t1[:, None, ...] + zz[..., None] * t2[:, None, ...] + v3[
             ..., None]
     ]
-    xx_gt = target_frames[0]
-    xy_gt = target_frames[1]
-    xz_gt = target_frames[2]
-    yx_gt = target_frames[3]
-    yy_gt = target_frames[4]
-    yz_gt = target_frames[5]
-    zx_gt = target_frames[6]
-    zy_gt = target_frames[7]
-    zz_gt = target_frames[8]
-    t0_t = target_frames[9]
-    t1_t = target_frames[10]
-    t2_t = target_frames[11]
+    xx_gt = target_frames[0][0]
+    xy_gt = target_frames[0][1]
+    xz_gt = target_frames[0][2]
+    yx_gt = target_frames[0][3]
+    yy_gt = target_frames[0][4]
+    yz_gt = target_frames[0][5]
+    zx_gt = target_frames[0][6]
+    zy_gt = target_frames[0][7]
+    zz_gt = target_frames[0][8]
+    t0_t = target_frames[1][0]
+    t1_t = target_frames[1][1]
+    t2_t = target_frames[1][2]
     t0_gt = target_positions[0]
     t1_gt = target_positions[1]
     t2_gt = target_positions[2]
@@ -416,18 +416,18 @@ def backbone(traj, backbone_affine_tensor, backbone_affine_mask, fape_clamp_dist
       config: Configuration of loss, should contain 'fape.clamp_distance' and
         'fape.loss_unit_distance'.
     """
-    _, rotation, translation = from_tensor(traj)
-    pred_frames = [rotation[0], rotation[1], rotation[2],
-                   rotation[3], rotation[4], rotation[5],
-                   rotation[6], rotation[7], rotation[8],
-                   translation[0], translation[1], translation[2]]
+    _, rotation, translation = quaternion_from_tensor(traj)
+    pred_frames = ((rotation[0], rotation[1], rotation[2],
+                    rotation[3], rotation[4], rotation[5],
+                    rotation[6], rotation[7], rotation[8]),
+                   (translation[0], translation[1], translation[2]))
     pred_positions = [translation[0], translation[1], translation[2]]
 
-    _, rotation_gt, translation_gt = from_tensor(backbone_affine_tensor)
-    target_frames = [rotation_gt[0], rotation_gt[1], rotation_gt[2],
-                     rotation_gt[3], rotation_gt[4], rotation_gt[5],
-                     rotation_gt[6], rotation_gt[7], rotation_gt[8],
-                     translation_gt[0], translation_gt[1], translation_gt[2]]
+    _, rotation_gt, translation_gt = quaternion_from_tensor(backbone_affine_tensor)
+    target_frames = ((rotation_gt[0], rotation_gt[1], rotation_gt[2],
+                      rotation_gt[3], rotation_gt[4], rotation_gt[5],
+                      rotation_gt[6], rotation_gt[7], rotation_gt[8]),
+                     (translation_gt[0], translation_gt[1], translation_gt[2]))
     target_positions = [translation_gt[0], translation_gt[1], translation_gt[2]]
 
     frames_mask = backbone_affine_mask

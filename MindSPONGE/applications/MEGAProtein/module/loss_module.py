@@ -21,7 +21,7 @@ from mindspore import Tensor
 from mindspore.ops import functional as F
 from mindspore.ops import operations as P
 from mindsponge.common import residue_constants
-from mindsponge.common.geometry import invert_point, from_tensor
+from mindsponge.common.geometry import invert_point, quaternion_from_tensor, vecs_expend_dims
 from mindsponge.metrics.structure_violations import softmax_cross_entropy, sigmoid_cross_entropy, \
     get_structural_violations, compute_renamed_ground_truth, backbone, sidechain, supervised_chi, \
     local_distance_difference_test
@@ -204,16 +204,12 @@ class LossNet(nn.Cell):
                            filter_by_solution):
         """aligned_error_loss"""
         # Shape (num_res, 7) predict affine
-        _, rotation_pd, translation_pd = from_tensor(final_affines)
-        translation_point_pd = [mnp.expand_dims(translation_pd[0], -2),
-                                mnp.expand_dims(translation_pd[1], -2),
-                                mnp.expand_dims(translation_pd[2], -2)]
+        _, rotation_pd, translation_pd = quaternion_from_tensor(final_affines)
+        translation_point_pd = vecs_expend_dims(translation_pd, -2)
         rotation_pd_tensor = rotation_pd
         # Shape (num_res, 7) true affine
-        _, rotation_gt, translation_gt = from_tensor(backbone_affine_tensor)
-        translation_point_tr = [mnp.expand_dims(translation_gt[0], -2),
-                                mnp.expand_dims(translation_gt[1], -2),
-                                mnp.expand_dims(translation_gt[2], -2)]
+        _, rotation_gt, translation_gt = quaternion_from_tensor(backbone_affine_tensor)
+        translation_point_tr = vecs_expend_dims(translation_gt, -2)
         rotation_gt_tensor = rotation_gt
         mask = backbone_affine_mask
         square_mask = (mask[:, None] * mask[None, :]).astype(ms.float32)
