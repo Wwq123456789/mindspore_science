@@ -13,4 +13,4 @@
 # limitations under the License.
 # ============================================================================
 '''init'''
-from .fold import MegaFold
+from .fold import MegaFold, compute_confidence

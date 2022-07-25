@@ -130,9 +130,8 @@ class SingleTemplateEmbedding(nn.Cell):
         num_res = template_aatype[0, ...].shape[0]
         template_mask_2d_temp = P.ExpandDims()(template_pseudo_beta_mask, -1) * \
                                 P.ExpandDims()(template_pseudo_beta_mask, 1)
-        template_dgram_temp = dgram_from_positions(template_pseudo_beta, self.num_bins, self.min_bin, self.max_bin)
-
-        template_dgram_temp = P.Cast()(template_dgram_temp, self._type)
+        template_dgram_temp = dgram_from_positions(template_pseudo_beta, self.num_bins, self.min_bin,
+                                                   self.max_bin, self._type)
 
         to_concat_temp = (template_dgram_temp, P.ExpandDims()(template_mask_2d_temp, -1))
         aatype_temp = self.one_hot(template_aatype)
