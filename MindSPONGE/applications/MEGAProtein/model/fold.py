@@ -21,12 +21,15 @@ from mindspore.ops import operations as P
 from mindspore.common.tensor import Tensor
 from mindspore import Parameter
 import mindsponge.common.residue_constants as residue_constants
-from mindsponge.common.utils import pseudo_beta_fn, atom37_to_torsion_angles
+from mindsponge.common.utils import dgram_from_positions, pseudo_beta_fn, atom37_to_torsion_angles
 from mindsponge.data.data_transform import get_chi_atom_pos_indices
 from mindsponge.cell.initializer import lecun_init
 from module.template_embedding import TemplateEmbedding
 from module.evoformer import Evoformer
 from module.structure import StructureModule
+from module.head import DistogramHead, ExperimentallyResolvedHead, MaskedMsaHead, \
+    PredictedLDDTHead, PredictedAlignedErrorHead
+from scipy.special import softmax
 
 
 def caculate_constant_array(seq_length):
@@ -53,34 +56,30 @@ def caculate_constant_array(seq_length):
     return constant_array
 
 
-def caculate_bounds(num_bins, min_bin, max_bin):
-    lower_breaks = np.linspace(min_bin, max_bin, num_bins)
-    lower_breaks = np.square(lower_breaks)
-    upper_breaks = np.concatenate([lower_breaks[1:], np.array([1e8], dtype=np.float32)], axis=-1)
-    return lower_breaks, upper_breaks
+def compute_confidence(predicted_lddt_logits):
+    """compute confidence"""
+
+    num_bins = predicted_lddt_logits.shape[-1]
+    bin_width = 1 / num_bins
+    start_n = bin_width / 2
+    plddt = compute_plddt(predicted_lddt_logits, start_n, bin_width)
+    confidence = np.mean(plddt)
+    return confidence
 
 
-def dgram_from_positions_bak(positions, lower, upper):
-    """Compute distogram from amino acid positions.
+def compute_plddt(logits, start_n, bin_width):
+    """Computes per-residue pLDDT from logits.
 
-    Arguments:
-    positions: [N_res, 3] Position coordinates.
-    num_bins: The number of bins in the distogram.
-    min_bin: The left edge of the first bin.
-    max_bin: The left edge of the final bin. The final bin catches
-    everything larger than `max_bin`.
+    Args:
+      logits: [num_res, num_bins] output from the PredictedLDDTHead.
 
     Returns:
-    Distogram with the specified number of bins.
+      plddt: [num_res] per-residue pLDDT.
     """
-
-    def squared_difference(x, y):
-        return mnp.square(x - y)
-
-    dist2 = mnp.sum(squared_difference(mnp.expand_dims(positions, axis=-2),
-                                       mnp.expand_dims(positions, axis=-3)), axis=-1, keepdims=True)
-    dgram = mnp.logical_and((dist2 > lower), (dist2 < upper))
-    return dgram
+    bin_centers = np.arange(start=start_n, stop=1.0, step=bin_width)
+    probs = softmax(logits, axis=-1)
+    predicted_lddt_ca = np.sum(probs * bin_centers[None, :], axis=-1)
+    return predicted_lddt_ca * 100
 
 
 class MegaFold(nn.Cell):
@@ -148,6 +147,8 @@ class MegaFold(nn.Cell):
                                         is_extra_msa=True,
                                         batch_size=None,
                                         mixed_precision=mixed_precision)
+            if self.is_training:
+                extra_msa_block.recompute()
             extra_msa_stack.append(extra_msa_block)
         self.extra_msa_stack = extra_msa_stack
         if self.is_training:
@@ -159,8 +160,17 @@ class MegaFold(nn.Cell):
                                       is_extra_msa=False,
                                       batch_size=None,
                                       mixed_precision=mixed_precision)
+                msa_block.recompute()
                 msa_stack.append(msa_block)
             self.msa_stack = msa_stack
+
+            self.module_distogram = DistogramHead(self.cfg.heads.distogram,
+                                                  self.cfg.pair_channel)
+            self.module_exp_resolved = ExperimentallyResolvedHead(self.cfg.seq_channel)
+            self.module_mask = MaskedMsaHead(self.cfg.heads.masked_msa,
+                                             self.cfg.msa_channel)
+            self.aligned_error = PredictedAlignedErrorHead(self.cfg.heads.predicted_aligned_error,
+                                                           self.cfg.pair_channel)
         else:
             self.msa_stack = Evoformer(self.cfg,
                                        msa_act_dim=256,
@@ -175,9 +185,9 @@ class MegaFold(nn.Cell):
                                                 self.cfg.seq_channel,
                                                 self.cfg.pair_channel,
                                                 mixed_precision)
-        lower_breaks, upper_breaks = caculate_bounds(self.num_bins, self.min_bin, self.max_bin)
-        self.lower_breaks = Tensor(lower_breaks, self._type)
-        self.upper_breaks = Tensor(upper_breaks, self._type)
+
+        self.module_lddt = PredictedLDDTHead(self.cfg.heads.predicted_lddt,
+                                             self.cfg.seq_channel)
 
     def construct(self, target_feat, msa_feat, msa_mask, seq_mask, aatype,
                   template_aatype, template_all_atom_masks, template_all_atom_positions,
@@ -196,7 +206,7 @@ class MegaFold(nn.Cell):
         mask_2d = P.ExpandDims()(seq_mask, 1) * P.ExpandDims()(seq_mask, 0)
         if self.recycle_pos:
             prev_pseudo_beta = pseudo_beta_fn(aatype, prev_pos, None)
-            dgram = dgram_from_positions_bak(prev_pseudo_beta, self.lower_breaks, self.upper_breaks).astype(self._type)
+            dgram = dgram_from_positions(prev_pseudo_beta, self.num_bins, self.min_bin, self.max_bin, self._type)
             pair_activations += self.prev_pos_linear(dgram)
 
         if self.recycle_features:
@@ -274,8 +284,21 @@ class MegaFold(nn.Cell):
                                   aatype,
                                   residx_atom37_to_atom14,
                                   atom37_atom_exists)
+        predicted_lddt_logits = self.module_lddt(rp_structure_module)
+        if self.train_backward:
+            predicted_lddt_logits = self.module_lddt(rp_structure_module)
+            dist_logits, bin_edges = self.module_distogram(pair_activations)
+            experimentally_logits = self.module_exp_resolved(single_activations)
+            masked_logits = self.module_mask(msa)
+            aligned_error_logits, aligned_error_breaks = self.aligned_error(pair_activations)
+            return dist_logits, bin_edges, experimentally_logits, masked_logits, aligned_error_logits, \
+                   aligned_error_breaks, atom14_pred_positions, final_affines, angles_sin_cos_new, \
+                   predicted_lddt_logits, structure_traj, sidechain_frames, sidechain_atom_pos, \
+                   um_angles_sin_cos_new, final_atom_positions
         final_atom_positions = P.Cast()(final_atom_positions, self._type)
         prev_pos = final_atom_positions
         prev_msa_first_row = msa_first_row
         prev_pair = pair_activations
-        return prev_pos, prev_msa_first_row, prev_pair
+        if self.is_training:
+            return prev_pos, prev_msa_first_row, prev_pair
+        return prev_pos, prev_msa_first_row, prev_pair, predicted_lddt_logits

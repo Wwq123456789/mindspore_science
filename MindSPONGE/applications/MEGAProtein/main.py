@@ -16,6 +16,7 @@
 import argparse
 import pickle
 import os
+import json
 import time
 import mindspore.context as context
 import mindspore.common.dtype as mstype
@@ -25,7 +26,7 @@ from mindsponge.cell.initializer import do_keep_cell_fp32
 from mindsponge.common.config_load import load_config
 from mindsponge.common.protein import to_pdb, from_prediction
 from data import Feature
-from model import MegaFold
+from model import MegaFold, compute_confidence
 
 
 parser = argparse.ArgumentParser(description='Inputs for eval.py')
@@ -76,20 +77,25 @@ def fold_infer(args):
 
     seq_files = os.listdir(args.pkl_path)
     for seq_file in seq_files:
+        t1 = time.time()
         seq_name = seq_file.split('.')[0]
         raw_feature = load_pkl(args.pkl_path + seq_file)
         ori_res_length = raw_feature['msa'].shape[1]
         processed_feature = Feature(data_cfg, raw_feature)
         feat, prev_pos, prev_msa_first_row, prev_pair = processed_feature.pipeline(data_cfg,
                                                                                    mixed_precision=args.mixed_precision)
-        t1 = time.time()
+        t2 = time.time()
         for i in range(data_cfg.common.num_recycle):
             feat_i = [Tensor(x[i]) for x in feat]
-            prev_pos, prev_msa_first_row, prev_pair = megafold(*feat_i, prev_pos, prev_msa_first_row, prev_pair)
-        t2 = time.time()
-        print("predict time ", t2 - t1, "s")
+            prev_pos, prev_msa_first_row, prev_pair, predicted_lddt_logits = megafold(*feat_i,
+                                                                                      prev_pos,
+                                                                                      prev_msa_first_row,
+                                                                                      prev_pair)
+        t3 = time.time()
         final_atom_positions = prev_pos.asnumpy()[:ori_res_length]
         final_atom_mask = feat[16][0][:ori_res_length]
+        predicted_lddt_logits = predicted_lddt_logits.asnumpy()[:ori_res_length]
+        confidence = compute_confidence(predicted_lddt_logits)
         unrelaxed_protein = from_prediction(final_atom_positions, final_atom_mask,
                                             feat[4][0][:ori_res_length], feat[17][0][:ori_res_length])
         pdb_file = to_pdb(unrelaxed_protein)
@@ -97,7 +103,15 @@ def fold_infer(args):
         with open(os.path.join(f'./result/seq_{seq_name}_{model_cfg.seq_length}',
                                f'unrelaxed_model_{seq_name}.pdb'), 'w') as file:
             file.write(pdb_file)
-
+        t4 = time.time()
+        timings = {"pre_process_time": round(t2 - t1, 2),
+                   "predict time ": round(t3 - t2, 2),
+                   "pos_process_time": round(t4 - t3, 2),
+                   "all_time": round(t4 - t1, 2),
+                   "confidence": confidence}
+        print(timings)
+        with open(f'./result/seq_{seq_name}_{model_cfg.seq_length}/timings', 'w') as f:
+            f.write(json.dumps(timings))
 
 if __name__ == "__main__":
     if arguments.run_platform == 'Ascend':

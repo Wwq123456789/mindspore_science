@@ -20,7 +20,6 @@ from Bio.Align import substitution_matrices
 from mindspore import nn
 import mindspore.numpy as mnp
 from mindspore.ops import operations as P
-from scipy.special import softmax
 
 from . import geometry
 from . import residue_constants, protein
@@ -43,7 +42,7 @@ def pseudo_beta_fn(aatype, all_atom_positions, all_atom_masks):
     return pseudo_beta
 
 
-def dgram_from_positions(positions, num_bins, min_bin, max_bin):
+def dgram_from_positions(positions, num_bins, min_bin, max_bin, ret_type):
     """Compute distogram from amino acid positions.
 
     Arguments:
@@ -65,7 +64,7 @@ def dgram_from_positions(positions, num_bins, min_bin, max_bin):
     upper_breaks = mnp.concatenate([lower_breaks[1:], mnp.array([1e8], dtype=mnp.float32)], axis=-1)
     dist2 = mnp.sum(squared_difference(mnp.expand_dims(positions, axis=-2),
                                        mnp.expand_dims(positions, axis=-3)), axis=-1, keepdims=True)
-    dgram = ((dist2 > lower_breaks).astype(mnp.float32) * (dist2 < upper_breaks).astype(mnp.float32))
+    dgram = ((dist2 > lower_breaks).astype(ret_type) * (dist2 < upper_breaks).astype(ret_type))
     return dgram
 
 
@@ -350,32 +349,6 @@ def atom14_to_atom37(atom14_data, residx_atom37_to_atom14, atom37_atom_exists, i
     return atom37_data
 
 
-def compute_confidence(predicted_lddt_logits):
-    """compute confidence"""
-
-    num_bins = predicted_lddt_logits.shape[-1]
-    bin_width = 1 / num_bins
-    start_n = bin_width / 2
-    plddt = compute_plddt(predicted_lddt_logits, start_n, bin_width)
-    confidence = np.mean(plddt)
-    return confidence
-
-
-def compute_plddt(logits, start_n, bin_width):
-    """Computes per-residue pLDDT from logits.
-
-    Args:
-      logits: [num_res, num_bins] output from the PredictedLDDTHead.
-
-    Returns:
-      plddt: [num_res] per-residue pLDDT.
-    """
-    bin_centers = np.arange(start=start_n, stop=1.0, step=bin_width)
-    probs = softmax(logits, axis=-1)
-    predicted_lddt_ca = np.sum(probs * bin_centers[None, :], axis=-1)
-    return predicted_lddt_ca * 100
-
-
 def make_atom14_positions(aatype, all_atom_mask, all_atom_positions):
     """Constructs denser atom positions (14 dimensions instead of 37).
     Args:
@@ -586,3 +559,67 @@ def get_aligned_seq(gt_seq, pr_seq):
     for i in range(int(point[2])-int(point[1])-1):
         query = query + align_str[i + int(point[1])+1]
     return target, align_relationship, query
+
+
+def find_optimal_renaming(
+        atom14_gt_positions,  # (N, 14, 3)
+        atom14_alt_gt_positions,  # (N, 14, 3)
+        atom14_atom_is_ambiguous,  # (N, 14)
+        atom14_gt_exists,  # (N, 14)
+        atom14_pred_positions,  # (N, 14, 3)
+):  # (N):
+    """Find optimal renaming for ground truth that maximizes LDDT.
+
+    Jumper et al. (2021) Suppl. Alg. 26
+    "renameSymmetricGroundTruthAtoms" lines 1-5
+
+    Args:
+      atom14_gt_positions: Ground truth positions in global frame of ground truth.
+      atom14_alt_gt_positions: Alternate ground truth positions in global frame of
+        ground truth with coordinates of ambiguous atoms swapped relative to
+        'atom14_gt_positions'.
+      atom14_atom_is_ambiguous: Mask denoting whether atom is among ambiguous
+        atoms, see Jumper et al. (2021) Suppl. Table 3
+      atom14_gt_exists: Mask denoting whether atom at positions exists in ground
+        truth.
+      atom14_pred_positions: Predicted positions of atoms in
+        global prediction frame
+      atom14_atom_exists: Mask denoting whether atom at positions exists for given
+        amino acid type
+
+    Returns:
+      Float array of shape [N] with 1. where atom14_alt_gt_positions is closer to
+      prediction and 0. otherwise
+    """
+
+    # Create the pred distance matrix.
+    atom14_pred_positions = P.Pad(((0, 0), (0, 0), (0, 5)))(atom14_pred_positions)
+    pred_dists = mnp.sqrt(1e-10 + mnp.sum(
+        mnp.square(atom14_pred_positions[:, None, :, None, :] - atom14_pred_positions[None, :, None, :, :]), axis=-1))
+
+    # Compute distances for ground truth with original and alternative names.
+    gt_dists = mnp.sqrt(1e-10 + mnp.sum(
+        mnp.square(atom14_gt_positions[:, None, :, None, :] - atom14_gt_positions[None, :, None, :, :]), axis=-1))
+    alt_gt_dists = mnp.sqrt(1e-10 + mnp.sum(
+        mnp.square(atom14_alt_gt_positions[:, None, :, None, :] - atom14_alt_gt_positions[None, :, None, :, :]),
+        axis=-1))
+
+    # Compute LDDT's.
+    lddt = mnp.sqrt(1e-10 + mnp.square(pred_dists - gt_dists))
+    alt_lddt = mnp.sqrt(1e-10 + mnp.square(pred_dists - alt_gt_dists))
+
+    # Create a mask for ambiguous atoms in rows vs. non-ambiguous atoms
+    # in cols.
+    mask = (atom14_gt_exists[:, None, :, None] *  # rows
+            atom14_atom_is_ambiguous[:, None, :, None] *  # rows
+            atom14_gt_exists[None, :, None, :] *  # cols
+            (1. - atom14_atom_is_ambiguous[None, :, None, :]))  # cols
+
+    # Aggregate distances for each residue to the non-amibuguous atoms.
+    per_res_lddt = P.ReduceSum()(mask * lddt, (1, 2, 3))
+    alt_per_res_lddt = P.ReduceSum()(mask * alt_lddt, (1, 2, 3))
+
+    # Decide for each residue, whether alternative naming is better.
+    alt_naming_is_better = (alt_per_res_lddt < per_res_lddt)
+
+    return alt_naming_is_better
