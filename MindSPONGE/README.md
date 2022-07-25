@@ -26,7 +26,7 @@
 
 ## **MindSPONGE介绍**
 
-MindSPONGE(Simulation Package Of Next GEneration molecular modelling)是基于[昇思MindSpore](https://www.mindspore.cn/)的计算生物领域套件，支持分子动力学、蛋白质折叠等常用功能，旨在于为广大的科研人员、老师及学生提供高效易用的AI计算生物软件。
+MindSPONGE(Simulation Package tOwards Next GEneration molecular modelling)是基于[昇思MindSpore](https://www.mindspore.cn/)的计算生物领域套件，支持分子动力学、蛋白质折叠等常用功能，旨在于为广大的科研人员、老师及学生提供高效易用的AI计算生物软件。
 
 <img src="docs/archi.png" alt="MindSPONGE Architecture" width="600"/>
 
@@ -123,10 +123,11 @@ bash build.sh -e ascend
 bash build.sh -e gpu -t on -j32
 ```
 
-#### 安装编译所得whl包，在`{PATH}/mindscience/MinsSPONGE/output`下
+#### 安装编译所得whl包
 
 ```bash
-pip install {PATH}/mindscience/MindSPONGE/output/mindscience_sponge*.whl
+cd {PATH}/mindscience/MindSPONGE/output
+pip install mindscience_sponge*.whl
 ```
 
 ## **社区**
