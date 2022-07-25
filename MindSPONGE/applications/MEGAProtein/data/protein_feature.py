@@ -16,15 +16,16 @@
 protein feature generation module.
 """
 
-import pickle
-import os
-import stat
 import numpy as np
+from absl import logging
 
 from mindsponge.data.parsers import parse_fasta, parse_hhr, parse_a3m
+from mindsponge.data.data_transform import convert_monomer_features, convert_unnecessary_leading_dim_feats
 from mindsponge.common import residue_constants
 from data.templates import TemplateHitFeaturizer
 from data.hhsearch import HHSearch
+from data.msa_query import MmseqQuery
+from data.multimer_pipeline import add_assembly_features, pair_and_merge, pad_msa
 
 
 def make_msa_features(msas, deletion_matrices):
@@ -48,8 +49,11 @@ def make_msa_features(msas, deletion_matrices):
     num_res = len(msas[0][0])
     num_alignments = len(int_msa)
     features = {'deletion_matrix_int': np.array(deletion_matrix, dtype=np.int32),
+                'deletion_matrix_int_all_seq': np.array(deletion_matrix, dtype=np.int32),
                 'msa': np.array(int_msa, dtype=np.int32),
-                'num_alignments': np.array([num_alignments] * num_res, dtype=np.int32)}
+                'msa_all_seq': np.array(int_msa, dtype=np.int32),
+                'num_alignments': np.array([num_alignments] * num_res, dtype=np.int32),
+                'msa_species_identifiers_all_seq': np.array([b''] * num_alignments)}
     return features
 
 
@@ -76,8 +80,12 @@ class RawFeatureGenerator:
                  obsolete_pdbs_path,
                  hhsearch_binary_path,
                  pdb70_database_path,
-                 result_path,
-                 max_hits=20):
+                 database_envdb_dir,
+                 mmseqs_binary,
+                 database_dir,
+                 a3m_result_path,
+                 max_hits=20,
+                 msa_length=512):
         """Search the a3m info for a given FASTA file."""
 
         self.template_mmcif_dir = template_mmcif_dir
@@ -86,12 +94,15 @@ class RawFeatureGenerator:
         self.obsolete_pdbs_path = obsolete_pdbs_path
         self.hhsearch_binary_path = hhsearch_binary_path
         self.pdb70_database_path = pdb70_database_path
-        self.result_path = result_path
+        self.a3m_result_path = a3m_result_path
         self.max_hits = max_hits
+        self.msa_length = msa_length
+        self.msa_query = MmseqQuery(database_envdb_dir=database_envdb_dir, mmseqs_binary=mmseqs_binary,
+                                    database_dir=database_dir, result_path=a3m_result_path)
         self.hhsearch_pdb70_runner = HHSearch(binary_path=hhsearch_binary_path, databases=[pdb70_database_path])
-        self.result_path = result_path
 
-    def raw_feature_generate(self, raw_feature_path, fasta_path, a3m_lines):
+
+    def monomer_feature_generate(self, fasta_path):
         """protein raw feature generation"""
         template_featurizer = TemplateHitFeaturizer(mmcif_dir=self.template_mmcif_dir,
                                                     max_template_date=self.max_template_date,
@@ -108,6 +119,7 @@ class RawFeatureGenerator:
         input_description = input_descs[0]
 
         num_res = len(input_sequence)
+        a3m_lines = self.msa_query.aligned_a3m_files(fasta_path, self.a3m_result_path)
 
         hhsearch_result = self.hhsearch_pdb70_runner.query(a3m_lines)
         hhsearch_hits = parse_hhr(hhsearch_result)
@@ -125,8 +137,37 @@ class RawFeatureGenerator:
         msa_features = make_msa_features(msas=(msas,), deletion_matrices=(deletion_matrices,))
 
         feature_dict = {**sequence_features, **msa_features, **templates_result.features}
-        os.makedirs(raw_feature_path, exist_ok=True)
-        pkl_path = os.path.join(raw_feature_path, fasta_path.split(".fasta")[0]+'.pkl')
-        with os.fdopen(os.open(pkl_path, os.O_RDWR|os.O_CREAT, stat.S_IRWXU), 'wb') as f:
-            pickle.dump(feature_dict, f, protocol=4)
         return feature_dict
+
+    def multimer_feature_generate(self, fasta_paths: list):
+        """ multimer feature preprocess.
+
+        Args:
+            fasta_paths: a list path of fasta, each fasta for one chain fasta sequence file
+
+        Return:
+            multimer_feature: a combined feature for multi_chain protein
+
+        """
+        if len(fasta_paths) == 1:
+            logging.error("get only one fasta, will return monomer feature")
+            return self.monomer_feature_generate(fasta_paths[0])
+        all_chain_features = {}
+        for id_, fasta_path_ in enumerate(fasta_paths):
+            chain_feature = self.monomer_feature_generate(fasta_path_)
+            chain_feature["chain_id"], chain_feature["aatype"], chain_feature["template_aatype"] = \
+                convert_monomer_features(str(id_), chain_feature["aatype"], chain_feature["template_aatype"])
+            sequence, domain_name, num_alignments, seq_length = \
+                convert_unnecessary_leading_dim_feats(chain_feature["sequence"], chain_feature["domain_name"],
+                                                      chain_feature["num_alignments"], chain_feature["seq_length"])
+            chain_feature["sequence"] = sequence
+            chain_feature["domain_name"] = domain_name
+            chain_feature["num_alignments"] = num_alignments
+            chain_feature["seq_length"] = seq_length
+
+            all_chain_features[str(id_)] = chain_feature
+        all_chain_features = add_assembly_features(all_chain_features)
+        combined_features = pair_and_merge(all_chain_features)
+        combined_features = pad_msa(combined_features, self.msa_length)
+
+        return combined_features

@@ -61,8 +61,10 @@ class MmseqQuery:
         a3m_lines = ["".join(a3m_lines.get(key)) for key in a3m_lines]
         return a3m_lines[0]
 
-    def msa_query(self, fasta_path, result_path):
+    def msa_query(self, fasta_path, a3m_root_path):
         """main entry for msa_query"""
+        result_path = os.path.join(a3m_root_path, fasta_path.split(".fasta")[0])
+        os.makedirs(result_path, exist_ok=True)
         if self.database_envdb_dir:
             command = f"sh {self.msa_search_sh} {self.mmseqs_binary} " + fasta_path + " " + result_path + " " + \
                       self.database_dir + " " + "\"\"" + " " + self.database_envdb_dir + " \"1\" \"0\" \"1\""
@@ -77,7 +79,7 @@ class MmseqQuery:
     def aligned_a3m_files(self, input_fasta_path, result_path):
         """Runs alignment tools on the input sequence and creates features."""
 
-        a3m_file_paths = self.msa_query(fasta_path=input_fasta_path, result_path=result_path)
+        a3m_file_paths = self.msa_query(fasta_path=input_fasta_path, a3m_root_path=result_path)
         a3m_lines = self.get_a3mlines(a3m_paths=a3m_file_paths)
 
         return a3m_lines
