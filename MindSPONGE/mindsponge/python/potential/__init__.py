@@ -1,4 +1,12 @@
-# Copyright 2021 The AIMM Group at Shenzhen Bay Laboratory & Peking University & Huawei Technologies Co., Ltd
+# Copyright 2021-2022 @ Shenzhen Bay Laboratory &
+#                       Peking University &
+#                       Huawei Technologies Co., Ltd
+#
+# This code is a part of MindSPONGE:
+# MindSpore Simulation Package tOwards Next Generation molecular modelling.
+#
+# MindSPONGE is open-source software based on the AI-framework:
+# MindSpore (https://www.mindspore.cn/)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,4 +20,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""init"""
+"""Potential energy"""
+
+from .potential import PotentialCell
+from .forcefield import ForceFieldBase, ForceField
+from .energy import *
+from .bias import *
