@@ -84,7 +84,7 @@ class Protein(Molecule):
         else:
             _, residue_name, _, coordinate, residue_pointer, flatten_atoms, flatten_crds, init_res_names,\
                 init_res_ids, \
-                residue_index, _, _, _, _ = read_pdb(
+                _, _, _, _, _ = read_pdb(
                     pdb, ignore_hydrogen)
 
             if residue_name[0] != 'ACE' and residue_name[0] != 'NME':
@@ -96,11 +96,6 @@ class Protein(Molecule):
             self.init_resid = init_res_ids
             num_residue = len(residue_name)
             residue_pointer = np.append(residue_pointer, len(flatten_atoms))
-            # self.res_id = np.array([j for i in range(1, len(residue_pointer)) for j in [i - 1] * residue_pointer[i]],
-                                #    np.int32)
-            # self.backbone_mask = np.isin(flatten_atoms, backbone_atoms)
-            # oxt_id = np.where(np.isin(flatten_atoms, include_backbone_atoms))[0][-1]
-            # self.backbone_mask[oxt_id] = True
             template = get_template(template)
 
             self.residue = []
