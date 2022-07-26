@@ -40,8 +40,6 @@ class FullConnectNeighbours(Cell):
 
     def __init__(self, num_atoms: int):
         super().__init__()
-        # tot_atoms: A
-        # tot_neigh: N =  A - 1
         self.num_atoms = num_atoms
         self.num_neighbours = num_atoms - 1
 

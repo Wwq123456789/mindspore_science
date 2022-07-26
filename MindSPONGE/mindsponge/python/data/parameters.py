@@ -636,7 +636,6 @@ class ForceFieldParameters:
          'C0','F','Cl','Br','I','2C','3C','C8','CO']
         """
         atom_names_count = np.zeros(39)
-        # norm_factor = 2 / (self.atom_nums * (self.atom_nums - 1))
         for i in range(self.atom_nums):
             this_id = np.where(
                 np.isin(self.vdw_params["atoms"], atom_names[i]))[0]
