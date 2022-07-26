@@ -355,7 +355,6 @@ class GridNeighbours(Cell):
         grid_neigh_atoms, _ = self.sort(F.cast(grid_neigh_atoms, ms.float32))
         grid_neigh_atoms = F.cast(grid_neigh_atoms, ms.int32)
 
-        """
         # max_neighbours = msnp.sum(grid_neigh_atoms != self.num_atoms, axis=-1)
         # max_neighbours = F.cast(
         #     msnp.max(F.cast(max_neighbours, ms.float32)), ms.int32)
@@ -376,7 +375,6 @@ class GridNeighbours(Cell):
         #     print(
         #         '================================================================================')
         # grid_neigh_atoms = grid_neigh_atoms[..., :num_neighbours]
-        """
 
         # neighbour atoms for each atom
         # (B,A,N)
