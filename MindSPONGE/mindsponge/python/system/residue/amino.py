@@ -70,27 +70,3 @@ class AminoAcid(Residue):
         )
         self.atom_index = np.where(
             np.array(list(template[self.name]['atom_name'])) == self.atom_name[0][:, None])[-1]
-
-    def build_atom_type(self, template: dict):
-        """build atom type"""
-        self.atom_type = self._get_atom_type(template, self.atom_index)
-        return self
-
-    def build_atom_charge(self, template: dict):
-        """build atom type"""
-        self.atom_charge = Tensor(self._get_atom_charge(template, self.atom_index), ms.float32)
-        return self
-
-    def _get_atom_type(self, template: dict, atom_index: ndarray = None) -> ndarray:
-        """get atom type from template and atomic serial"""
-        atom_type = np.array(template[self.name]['atom_type'], np.str_)
-        if atom_index is not None:
-            atom_type = atom_type[atom_index]
-        return atom_type
-
-    def _get_atom_charge(self, template: dict, atom_index: ndarray = None) -> ndarray:
-        """get atom charge from template and atomic serial"""
-        atom_charge = np.array(template[self.name]['atom_charge'], np.float32)
-        if atom_index is not None:
-            atom_charge = atom_charge[atom_index]
-        return atom_charge

@@ -443,27 +443,51 @@ class Residue:
         self.atomic_number = Tensor(self._get_atomic_number(template, self.atom_index), ms.int32)
         return self
 
+    def build_atom_type(self, template: dict):
+        """build atom type"""
+        self.atom_type = self._get_atom_type(template, self.atom_index)
+        return self
+
+    def build_atom_charge(self, template: dict):
+        """build atom type"""
+        self.atom_charge = Tensor(self._get_atom_charge(template, self.atom_index), ms.float32)
+        return self
+
     def build_bond(self, template: dict):
         """build bond"""
         self.bond = Tensor(self._get_bond(template, self.atom_index), ms.int32)
         return self
 
     def _get_atom_mass(self, template: dict, atom_index: ndarray = None) -> ndarray:
-        """get atom mass from template and atomic serial"""
+        """get atom mass from template and atom index"""
         atom_mass = np.array(template.get('atom_mass'), np.float32)
         if atom_index is not None:
             atom_mass = atom_mass[atom_index]
         return atom_mass
 
     def _get_atomic_number(self, template: dict, atom_index: ndarray = None) -> ndarray:
-        """get atomic number from template and atomic serial"""
+        """get atomic number from template and atom index"""
         atomic_number = np.array(template.get('atomic_number'), np.int32)
         if atom_index is not None:
             atomic_number = atomic_number[atom_index]
         return atomic_number
 
+    def _get_atom_type(self, template: dict, atom_index: ndarray = None) -> ndarray:
+        """get atom type from template and atom index"""
+        atom_type = np.array(template[self.name]['atom_type'], np.str_)
+        if atom_index is not None:
+            atom_type = atom_type[atom_index]
+        return atom_type
+
+    def _get_atom_charge(self, template: dict, atom_index: ndarray = None) -> ndarray:
+        """get atom charge from template and atom index"""
+        atom_charge = np.array(template[self.name]['atom_charge'], np.float32)
+        if atom_index is not None:
+            atom_charge = atom_charge[atom_index]
+        return atom_charge
+
     def _get_bond(self, template: dict, atom_index: ndarray = None) -> ndarray:
-        """get bond from template and atomic serial"""
+        """get bond from template and atom index"""
         bond = np.array(template.get('bond'))
         if atom_index is not None:
             bond_list = bond.reshape(-1).tolist()
