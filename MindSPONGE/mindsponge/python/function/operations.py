@@ -204,6 +204,8 @@ class VelocityGenerator(Cell):
         self.remove_translation = remove_translation
         self.identity = ops.Identity()
 
+        self.multi_temp = False
+
     def set_temperature(self, temperature: float):
         """set temperature"""
         self.temperature = Tensor(temperature, ms.float32).reshape(-1, 1, 1)

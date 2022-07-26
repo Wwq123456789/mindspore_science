@@ -144,6 +144,9 @@ class Sponge():
             self.analyse_network = AnalyseCell(
                 self._system, self._potential, self.neighbour_list)
 
+        self.sim_step = 0
+        self.sim_time = 0.0
+
     def change_optimizer(self, optimizer: Optimizer):
         """change optimizer"""
         if self._optimizer is None:

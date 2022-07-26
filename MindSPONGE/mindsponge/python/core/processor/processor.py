@@ -28,6 +28,25 @@ from mindspore.nn import Cell
 
 from ...function import get_integer
 
+_ENERGY_PROCESSOR_BY_KEY = dict()
+
+
+def _energy_processor_register(*aliases):
+    """Return the alias register."""
+    def alias_reg(cls):
+        name = cls.__name__
+        name = name.lower()
+        if name not in _ENERGY_PROCESSOR_BY_KEY:
+            _ENERGY_PROCESSOR_BY_KEY[name] = cls
+
+        for alias in aliases:
+            if alias not in _ENERGY_PROCESSOR_BY_KEY:
+                _ENERGY_PROCESSOR_BY_KEY[alias] = cls
+
+        return cls
+
+    return alias_reg
+
 
 class EnergyProcessor(Cell):
     r"""A network to process and merge the potential and bias during the simulation.
@@ -76,25 +95,6 @@ class EnergyProcessor(Cell):
 
         """
         raise NotImplementedError
-
-
-_ENERGY_PROCESSOR_BY_KEY = dict()
-
-def _energy_processor_register(*aliases):
-    """Return the alias register."""
-    def alias_reg(cls):
-        name = cls.__name__
-        name = name.lower()
-        if name not in _ENERGY_PROCESSOR_BY_KEY:
-            _ENERGY_PROCESSOR_BY_KEY[name] = cls
-
-        for alias in aliases:
-            if alias not in _ENERGY_PROCESSOR_BY_KEY:
-                _ENERGY_PROCESSOR_BY_KEY[alias] = cls
-
-        return cls
-
-    return alias_reg
 
 
 def get_energy_processor(processor: str,

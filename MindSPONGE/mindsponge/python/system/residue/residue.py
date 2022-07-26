@@ -288,6 +288,8 @@ class Residue:
                 raise ValueError(
                     'The value of tail_atom has exceeds the number of atoms.')
 
+        self.atom_index = None
+
     @property
     def name(self) -> str:
         return str(self._name)

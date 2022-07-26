@@ -20,8 +20,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""metrics init"""
+"""Metrics"""
 
 from .metrics import CV
-from .structure_violations import between_residue_bond, between_residue_clash, within_residue_violations, \
-    get_structural_violations

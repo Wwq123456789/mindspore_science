@@ -46,7 +46,6 @@ class FullConnectNeighbours(Cell):
         self.num_neighbours = num_atoms - 1
 
         # neighbours for no connection (A*N)
-        # self.nnc = msnp.broadcast_to(msnp.arange(tot_atoms).shape(-1,1),(tot_atoms,tot_neigh))
         # (A,1)
         no_idx = msnp.arange(self.num_atoms).reshape(-1, 1)
 

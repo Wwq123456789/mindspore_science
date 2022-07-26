@@ -60,7 +60,7 @@ def get_class_parameters(hyper_param: dict, prefix: str, num_class: int = 1) -> 
         if 'name' in new_params.keys():
             new_params['name'] = get_hyper_string(new_params, 'name')
             if len(new_params) == 1:
-                new_params = new_params['name']
+                new_params = new_params.get('name')
 
         if new_params:
             return new_params

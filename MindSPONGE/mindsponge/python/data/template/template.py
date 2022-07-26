@@ -59,7 +59,7 @@ def get_template(template: str) -> dict:
             raise ValueError('Cannot find template file: "'+template+'".')
 
     with open(filename, 'r', encoding="utf-8") as file:
-        template = yaml.load(file, Loader=yaml.FullLoader)
+        template = yaml.safe_load(file.read())
 
     return template
 

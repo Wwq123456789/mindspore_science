@@ -39,6 +39,7 @@ class CV(Metric):
         super().__init__()
         self._indexes = indexes
         self.colvar = colvar
+        self._cv_value = None
 
     def clear(self):
         self._cv_value = 0

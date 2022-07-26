@@ -178,6 +178,10 @@ class Molecule(Cell):
         self.has_empty_atom = None
         self.system_natom = None
 
+        self.use_pbc = False
+        self.num_com = None
+        self.image = None
+
         self.build_system()
         if self.residue is not None:
             self.build_space(coordinate, pbc_box)

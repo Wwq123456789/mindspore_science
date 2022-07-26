@@ -57,9 +57,8 @@ def get_forcefield_parameters(forcefield: str) -> dict:
         if not os.path.exists(filename):
             raise ValueError('Cannot find force field parameters file: "'+forcefield+'".')
 
-        parameters = None
         with open(filename, 'r', encoding="utf-8") as file:
-            parameters = yaml.load(file, Loader=yaml.FullLoader)
+            parameters = yaml.safe_load(file.read())
 
         return parameters
 

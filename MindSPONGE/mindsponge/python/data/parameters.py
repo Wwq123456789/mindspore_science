@@ -99,7 +99,6 @@ class ForceFieldParameters:
         self.excludes = np.empty(atom_nums)[:, None]
         self.vdw_param = np.empty((atom_nums, 2))
         self.pair_index = None
-        # self.c_expectation = 0
 
     def get_bond_params(self, bonds, atom_types):
         """ Get the force field bond parameters. """
@@ -151,9 +150,6 @@ class ForceFieldParameters:
         mask_id = np.where(
             angle_types.reshape(angles.shape[0] * 2, 1) == self._angles["atoms"]
         )
-
-        # if mask_id[0].shape[0] < angles.shape[0]:
-        #     raise ValueError("Elements in atom types not recognized!")
 
         left_id = np.where(mask_id[0] < angles.shape[0])[0]
         angle_id[mask_id[0][left_id]] = mask_id[1][left_id]
@@ -632,11 +628,6 @@ class ForceFieldParameters:
             )
         return self.excludes
 
-    #
-    # def get_mass(self, atom_names):
-    #     for i in range(self.atom_nums):
-    #         self.mass[i] = mass_dict[atom_names[i]]
-
     def get_vdw_params(self, atom_names):
         """
         ['H','HO','HS','HC','H1','H2','H3','HP','HA','H4',
@@ -656,11 +647,6 @@ class ForceFieldParameters:
             self.vdw_param[i][0] = self.vdw_params["epsilon"][this_id]
             self.vdw_param[i][1] = self.vdw_params["sigma"][this_id]
             atom_names_count[this_id] += 1
-
-        # atom_counts_matrix = np.outer(atom_names_count, atom_names_count)
-        # vdw_constants = np.triu(
-        #     self.b_coeff * atom_counts_matrix, k=1) * norm_factor
-        # self.c_expectation = vdw_constants.sum()
 
     def get_pairwise_c6(self, e0, e1, r0, r1):
         """ Calculate the B coefficient in vdw potential. """
