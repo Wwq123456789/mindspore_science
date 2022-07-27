@@ -18,8 +18,9 @@
         - [pip安装](#pip安装)
         - [源码安装](#源码安装)
     - [社区](#社区)
+        - [CO-CHAIR](#co-chair)
         - [SIG](#sig)
-        - [合作者](#合作者)
+        - [核心贡献者](#核心贡献者)
     - [许可证](#许可证)
 
 <!-- TOC -->
@@ -53,12 +54,12 @@ violation, _ = get_violation_loss(pdb_path)
     ##### geometry模块提供基础四元数、旋转矩阵、向量操作
 
 ```bash
-from mindsponge.common.geometry import generate_new_affine
+from mindsponge.common.geometry import initial_affine
 from mindsponge.common.geometry import quat_to_rot, rot_to_quat
 # quaternion is a mindspore tensor
 # rotation_matrix is a tuple of mindspore tensor, length is 9
 # translation is a tuple of mindsproe tensor, length is 3
-quat, rot, trans = generate_new_affine(128) # 128 is the num of residues
+quat, rot, trans = initial_affine(128) # 128 is the num of residues
 transformed_rot = quat_to_rot(quat)
 transformed_quat = rot_to_quat(rot)
 ```
@@ -70,10 +71,10 @@ transformed_quat = rot_to_quat(rot)
 
 **更多应用案例请见**：
 
-- [蛋白质结构松弛](https://gitee.com/izayoi16/mindscience/blob/dev-md/MindSPONGE/applications/molecular_dynamics/protein_relax/)
-- [蛋白质结构预测 MEGA-Fold](https://gitee.com/izayoi16/mindscience/blob/dev-md/MindSPONGE/applications/structure_prediction/)
-- [蛋白质结构评估 MEGA-Assessment](https://gitee.com/izayoi16/mindscience/blob/dev-md/MindSPONGE/applications/structure_prediction/)
-- [共进化数据引擎 MEGA-EvoGen](https://gitee.com/izayoi16/mindscience/blob/dev-md/MindSPONGE/applications/structure_prediction/)
+- [蛋白质结构松弛](https://gitee.com/mindspore/mindscience/tree/dev-md/MindSPONGE/applications/molecular_dynamics/protein_relax/)
+- [蛋白质结构预测 MEGA-Fold](https://gitee.com/mindspore/mindscience/tree/dev-md/MindSPONGE/applications/MEGAProtein/)
+- [蛋白质结构评估 MEGA-Assessment](https://gitee.com/mindspore/mindscience/tree/dev-md/MindSPONGE/applications/MEGAProtein/)
+- [共进化数据引擎 MEGA-EvoGen](https://gitee.com/mindspore/mindscience/tree/dev-md/MindSPONGE/applications/MEGAProtein/)
 - 基于功能的蛋白设计(TO BE DONE)
 - 基于结构的蛋白设计(TO BE DONE)
 - 蛋白质功能预测(TO BE DONE)
@@ -120,6 +121,7 @@ bash build.sh -e ascend
 #### GPU后端 (若使用传统分子动力学sponge，开启编译选项 `t` )
 
 ```bash
+export CUDA_PATH={your_cuda_path}
 bash build.sh -e gpu -t on -j32
 ```
 
@@ -131,6 +133,12 @@ pip install mindscience_sponge*.whl
 ```
 
 ## **社区**
+
+### CO-CHAIR
+
+- 深圳湾实验室杨奕
+
+- 北京昌平实验室张骏
 
 ### SIG
 
@@ -144,9 +152,9 @@ MindSPONGE SIG小组为广大科研人员，老师和学生提供高效易用的
 
 如果想加入我们，成为我们小组的成员，请将自己的简历发送至邮箱dingyahao@huawei.com，我们无时无刻不在期待着你的到来。
 
-### 合作者
+### 核心贡献者
 
-- [高毅勤课题组](https://www.chem.pku.edu.cn/gaoyq/)，[陈迪青](https://gitee.com/dechin)，[黄渝鹏](https://gitee.com/gao_hyp_xyj_admin)，[刘思睿](https://gitee.com/sirui63)，[夏义杰](https://gitee.com/gao_hyp_xyj_admin)，[杨奕](https://gitee.com/helloyesterday)，[张骏](https://gitee.com/jz_90)
+- [杨奕](https://gitee.com/helloyesterday)，[张骏](https://gitee.com/jz_90)，[刘思睿](https://gitee.com/sirui63)，[夏义杰](https://gitee.com/gao_hyp_xyj_admin)，[陈迪青](https://gitee.com/dechin)，[黄渝鹏](https://gitee.com/gao_hyp_xyj_admin)，[高毅勤课题组](https://www.chem.pku.edu.cn/gaoyq/)
 
 ## **许可证**
 
