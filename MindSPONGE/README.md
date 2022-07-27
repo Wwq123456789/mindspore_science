@@ -154,7 +154,7 @@ MindSPONGE SIG小组为广大科研人员，老师和学生提供高效易用的
 
 ### 核心贡献者
 
-- [杨奕](https://gitee.com/helloyesterday)，[张骏](https://gitee.com/jz_90)，[刘思睿](https://gitee.com/sirui63)，[夏义杰](https://gitee.com/gao_hyp_xyj_admin)，[陈迪青](https://gitee.com/dechin)，[黄渝鹏](https://gitee.com/gao_hyp_xyj_admin)，[高毅勤课题组](https://www.chem.pku.edu.cn/gaoyq/)
+- [高毅勤课题组](https://www.chem.pku.edu.cn/gaoyq/) : [杨奕](https://gitee.com/helloyesterday)，[张骏](https://gitee.com/jz_90)，[刘思睿](https://gitee.com/sirui63)，[夏义杰](https://gitee.com/gao_hyp_xyj_admin)，[陈迪青](https://gitee.com/dechin)，[黄渝鹏](https://gitee.com/gao_hyp_xyj_admin)
 
 ## **许可证**
 
