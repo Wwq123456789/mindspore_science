@@ -1,4 +1,12 @@
-# Copyright 2021 The AIMM Group at Shenzhen Bay Laboratory & Peking University & Huawei Technologies Co., Ltd
+# Copyright 2021-2022 @ Shenzhen Bay Laboratory &
+#                       Peking University &
+#                       Huawei Technologies Co., Ltd
+#
+# This code is a part of MindSPONGE:
+# MindSpore Simulation Package tOwards Next Generation molecular modelling.
+#
+# MindSPONGE is open-source software based on the AI-framework:
+# MindSpore (https://www.mindspore.cn/)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,102 +20,203 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""integrator"""
+"""
+Integrator
+"""
+
 import mindspore as ms
-from mindspore import ops
-from mindspore.ops import functional as F
-from mindspore.nn import Optimizer
-from mindspore.common import Tensor
-from mindspore import Parameter
-from mindspore import ms_function
-from mindspore.nn.optim.optimizer import opt_init_args_register
-from ...common.functions import keepdim_sum, concat_penulti
-from ...space.system import SystemCell
+from mindspore import Tensor
+from mindspore.nn import CellList
+
+from .. import Controller
 from ..thermostat import Thermostat
-
-_temperature_coupling = ops.MultitypeFuncGraph("temperature_coupling")
-
-
-@_temperature_coupling.register("Function", "Tensor", "Tensor")
-def _velocity_scling(thermostat, temperature, velocities):
-    success = True
-    v_new = thermostat(velocities, temperature)
-    success = F.depend(success, F.assign(velocities, v_new))
-    return success
+from ..barostat import Barostat
+from ..constraint import Constraint
+from ...system import Molecule
+from ...function.functions import get_integer
 
 
-class Integrator(Optimizer):
-    """integrator"""
-    @opt_init_args_register
-    def __init__(
-            self,
-            system: SystemCell,
-            time_step: float = 1e-3,
-            thermostat: Thermostat = None,
-            weight_decay: float = 0.0,
-            loss_scale: float = 1.0,
-    ):
+class Integrator(Controller):
+    r"""Integrator for simulation.
+
+    Args:
+
+        system (Molecule):          Simulation system
+
+        thermostat (Thermostat):    Thermostat for temperature coupling. Default: None
+
+        barostat (Barostat):        Barostat for pressure coupling. Default: None
+
+        constraint (Constraint):    Constraint algorithm. Default: None
+
+    """
+
+    def __init__(self,
+                 system: Molecule,
+                 thermostat: Thermostat = None,
+                 barostat: Barostat = None,
+                 constraint: Constraint = None,
+                 ):
+
         super().__init__(
-            learning_rate=time_step,
-            parameters=system.trainable_params(),
-            weight_decay=weight_decay,
-            loss_scale=loss_scale,
+            system=system,
+            control_step=1,
         )
 
-        self.system = system
-        self.mass = system.mass
-        self.inv_mass = system.inv_mass
-        self.units = system.units
-        self.system_mass = self.system.system_mass
-        self.degrees_of_freedom = self.system.degrees_of_freedom
+        self.kinetic_unit_scale = Tensor(self.units.kinetic_ref, ms.float32)
+        self.acc_unit_scale = Tensor(self.units.acceleration_ref, ms.float32)
 
-        self.kinetic_unit_scale = Tensor(self.units.kinetic_ref(), ms.float32)
-        self.acc_unit_scale = Tensor(self.units.acceleration_ref(), ms.float32)
-        self.vel_unit_scale = Tensor(self.units.velocity_ref(), ms.float32)
+        self.boltzmann = self.units.boltzmann
+        self.degrees_of_freedom = self.degrees_of_freedom
 
-        self.boltzmann = self.units.boltzmann()
+        self.thermostat = None
+        self.set_thermostat(thermostat)
 
-        self.tot_mass = keepdim_sum(self.mass[0], -1)
+        self.barostat = None
+        self.set_barostat(barostat)
 
-        self.num_walkers = self.system.num_walkers
+        self.constraint = None
+        self.num_constraint_controller = 0
+        self.set_constraint(constraint)
 
-        self.time_step = time_step
-
-        self.coordinates = self.parameters
-
-        self.thermostat = thermostat
-
-        self.step = Parameter(Tensor(0, ms.int32), name='step')
-
-        self.identity = ops.Identity()
-
-    def get_dt(self):
-        return self.get_lr()
-
-    def temperature_coupling(self, velocities, temperature):
-        success = True
+    def set_time_step(self, dt: float):
+        """set simulation time step"""
+        self.time_step = Tensor(dt, ms.float32)
         if self.thermostat is not None:
-            success = self.map_(F.partial(_temperature_coupling, self.thermostat, temperature), velocities)
-        return success
+            self.thermostat.set_time_step(dt)
+        if self.barostat is not None:
+            self.barostat.set_time_step(dt)
+        if self.constraint is not None:
+            for i in range(self.num_constraint_controller):
+                self.constraint[i].set_time_step(dt)
+        return self
 
-    @ms_function
-    def get_kinetic_energy(self, m, v):
-        # (B,A) <- (B,A,D)
-        v2 = F.reduce_sum(v * v, -1)
-        # (B,A) <- (1,A) * (B,A)
-        k = 0.5 * m * v2
-        return self.system.get_kinetic_energy(m, v)
+    def set_degrees_of_freedom(self, dofs: int):
+        """set degrees of freedom (DOFs)"""
+        self.degrees_of_freedom = get_integer(dofs)
+        if self.thermostat is not None:
+            self.thermostat.set_degrees_of_freedom(dofs)
+        if self.barostat is not None:
+            self.barostat.set_degrees_of_freedom(dofs)
+        if self.constraint is not None:
+            for i in range(self.num_constraint_controller):
+                self.constraint[i].set_degrees_of_freedom(dofs)
+        return self
 
-    @ms_function
-    def get_system_kinetic(self, velocities):
-        v = concat_penulti(velocities)
-        v = self.identity(v)
-        k = self.get_kinetic_energy(self.system_mass, v)
-        return k
+    def set_thermostat(self, thermostat: Thermostat):
+        """set thermostat algorithm for integrator"""
+        if self.thermostat is not None:
+            print('Warning! The thermostat for this integrator has already been set to "' +
+                  str(self.thermostat.cls_name)+'" but will now be changed to "'+str(thermostat.cls_name)+'".')
+        if thermostat is None:
+            self.thermostat = None
+        else:
+            self.thermostat = thermostat
+            self.thermostat.set_degrees_of_freedom(self.degrees_of_freedom)
+            self.thermostat.set_time_step(self.time_step)
+        return self
 
-    @ms_function
-    def get_temperature(self, kinetic=None):
-        return 2 * kinetic / self.degrees_of_freedom / self.boltzmann
+    def set_barostat(self, barostat: Barostat):
+        """set barostat algorithm for integrator"""
+        if self.barostat is not None:
+            print('Warning! The barostat for this integrator has already been set to "' +
+                  str(self.barostat.cls_name)+'" but will now be changed to "'+str(barostat.cls_name)+'".')
+        if barostat is None:
+            self.barostat = None
+        else:
+            self.barostat = barostat
+            self.barostat.set_degrees_of_freedom(self.degrees_of_freedom)
+            self.barostat.set_time_step(self.time_step)
+        return self
 
-    def construct(self, gradients):
+    def set_constraint(self, constraint: Constraint):
+        """set constraint algorithm for integrator"""
+        if self.constraint is not None:
+            print('Warning! The constraint for this integrator has already been set to "' +
+                  str(self.constraint.cls_name)+'" but will now be changed to "'+str(constraint.cls_name)+'".')
+        self.num_constraints = 0
+        if constraint is None:
+            self.constraint = None
+            self.num_constraint_controller = 0
+        else:
+            if isinstance(constraint, Controller):
+                self.num_constraint_controller = 1
+                constraint = [constraint]
+            elif isinstance(constraint, list):
+                self.num_constraint_controller = len(constraint)
+            else:
+                raise ValueError('The type of "constraint" must be Controller or list but got: '
+                                 + str(type(constraint)))
+
+            self.constraint = CellList(constraint)
+            for i in range(self.num_constraint_controller):
+                self.num_constraints += self.constraint[i].num_constraints
+                self.constraint[i].set_time_step(self.time_step)
+            degrees_of_freedom = self.sys_dofs - self.num_constraints
+            self.set_degrees_of_freedom(degrees_of_freedom)
+
+        return self
+
+    def add_constraint(self, constraint: Constraint):
+        """add constraint algorithm for integrator"""
+        if isinstance(constraint, Controller):
+            constraint = [constraint]
+            num_constraint_controller = 1
+        elif isinstance(constraint, list):
+            num_constraint_controller = len(constraint)
+        else:
+            raise ValueError('The type of "constraint" must be Controller or list but got: '
+                             + str(type(constraint)))
+
+        if self.constraint is None:
+            return self.set_constraint(constraint)
+
+        self.num_constraint_controller += num_constraint_controller
+        self.constraint.extend(constraint)
+        for i in range(self.num_constraint_controller):
+            self.num_constraints += self.constraint[i].num_constraints
+            self.constraint[i].set_time_step(self.time_step)
+        degrees_of_freedom = self.sys_dofs - self.num_constraints
+        self.set_degrees_of_freedom(degrees_of_freedom)
+
+        return self
+
+    def construct(self,
+                  coordinate: Tensor,
+                  velocity: Tensor,
+                  force: Tensor,
+                  energy: Tensor,
+                  kinetics: Tensor,
+                  virial: Tensor = None,
+                  pbc_box: Tensor = None,
+                  step: int = 0,
+                  ):
+        r"""update simulation step.
+
+        Args:
+            coordinate (Tensor):    Tensor of shape (B, A, D). Data type is float.
+            velocity (Tensor):      Tensor of shape (B, A, D). Data type is float.
+            force (Tensor):         Tensor of shape (B, A, D). Data type is float.
+            energy (Tensor):        Tensor of shape (B, 1). Data type is float.
+            kinetics (Tensor):      Tensor of shape (B, D). Data type is float.
+            virial (Tensor):        Tensor of shape (B, D). Data type is float.
+            pbc_box (Tensor):       Tensor of shape (B, D). Data type is float.
+            step (int):             Simulation step. Default: 0
+
+        Returns:
+            coordinate (Tensor):    Tensor of shape (B, A, D). Data type is float.
+            velocity (Tensor):      Tensor of shape (B, A, D). Data type is float.
+            force (Tensor):         Tensor of shape (B, A, D). Data type is float.
+            energy (Tensor):        Tensor of shape (B, 1). Data type is float.
+            kinetics (Tensor):      Tensor of shape (B, D). Data type is float.
+            virial (Tensor):        Tensor of shape (B, D). Data type is float.
+            pbc_box (Tensor):       Tensor of shape (B, D). Data type is float.
+
+        Symbols:
+            B:  Number of walkers in simulation.
+            A:  Number of atoms.
+            D:  Dimension of the simulation system. Usually is 3.
+
+        """
+
         raise NotImplementedError

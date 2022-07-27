@@ -1,4 +1,12 @@
-# Copyright 2021 The AIMM Group at Shenzhen Bay Laboratory & Peking University & Huawei Technologies Co., Ltd
+# Copyright 2021-2022 @ Shenzhen Bay Laboratory &
+#                       Peking University &
+#                       Huawei Technologies Co., Ltd
+#
+# This code is a part of MindSPONGE:
+# MindSpore Simulation Package tOwards Next Generation molecular modelling.
+#
+# MindSPONGE is open-source software based on the AI-framework:
+# MindSpore (https://www.mindspore.cn/)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,141 +20,113 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""velocity verlet"""
-from mindspore import ops
-from mindspore.common.api import ms_function
+"""
+Velocity verlet integrator
+"""
+
+import mindspore.numpy as msnp
 from mindspore.ops import functional as F
-from mindspore.nn.optim.optimizer import opt_init_args_register
+from mindspore import Tensor, Parameter
 
 from .integrator import Integrator
-
-_vv_integrator = ops.MultitypeFuncGraph("velocity_verlet_integrator")
-
-
-@_vv_integrator.register("Tensor", "Tensor", "Tensor", "Tensor", "Tensor", "Tensor", "Tensor")
-def _step_begin(acc_scale, dt, gradients, inv_mass, r_cur, v_cur, v_half):
-    """Apply sgd optimizer to the weight parameter using Tensor."""
-    success = True
-    a_cur = -acc_scale * gradients * inv_mass
-
-    v_new_half = v_cur + 0.5 * a_cur * dt
-    r_new = r_cur + v_new_half * dt
-
-    success = F.depend(success, F.assign(r_cur, r_new))
-    success = F.depend(success, F.assign(v_half, v_new_half))
-    return success
-
-
-@_vv_integrator.register("Tensor", "Tensor", "Tensor", "Tensor", "Tensor", "Tensor", "Tensor", "Tensor")
-def _step_update(acc_scale, dt, gradients, inv_mass, r_cur, r_last, v_half, v_last):
-    """Apply sgd optimizer to the weight parameter using Tensor."""
-    success = True
-    a_cur = -acc_scale * gradients * inv_mass
-
-    v_cur = v_half + 0.5 * a_cur * dt
-    v_new_half = v_cur + a_cur * dt
-    r_new = r_cur + v_new_half * dt
-
-    success = F.depend(success, F.assign(r_last, r_cur))
-    success = F.depend(success, F.assign(r_cur, r_new))
-    success = F.depend(success, F.assign(v_half, v_new_half))
-    success = F.depend(success, F.assign(v_last, v_cur))
-    return success
-
-
-@_vv_integrator.register("Tensor", "Tensor", "Tensor", "Tensor", "Tensor", "Tensor")
-def _step_end(acc_scale, dt, gradients, inv_mass, v_cur, v_half):
-    """Apply sgd optimizer to the weight parameter using Tensor."""
-    success = True
-    a_cur = -acc_scale * gradients * inv_mass
-
-    v_new = v_half + 0.5 * a_cur * dt
-    v_new_half = v_cur + a_cur * dt
-
-    success = F.depend(success, F.assign(v_cur, v_new))
-    success = F.depend(success, F.assign(v_half, v_new_half))
-
-    return success
+from ..thermostat import Thermostat
+from ..barostat import Barostat
+from ..constraint import Constraint
+from ...system import Molecule
 
 
 class VelocityVerlet(Integrator):
-    """velocity verlet"""
-    @opt_init_args_register
-    def __init__(
-            self,
-            system,
-            time_step=1e-3,
-            thermostat=None,
-            weight_decay=0.0,
-            loss_scale=1.0,
-    ):
+    r"""A velocity verlet integrator based on "middle scheme" developed by Jian Liu, et al.
+
+    Reference:
+
+        Zhang, Z.; Liu, X.; Chen, Z.; Zheng, H.; Yan, K.; Liu, J.
+        A Unified Thermostat Scheme for Efficient Configurational Sampling for
+            Classical/Quantum Canonical Ensembles via Molecular Dynamics [J].
+        The Journal of Chemical Physics, 2017, 147(3): 034109.
+
+    Args:
+
+        system (Molecule):          Simulation system
+
+        thermostat (Thermostat):    Thermostat for temperature coupling. Default: None
+
+        barostat (Barostat):        Barostat for pressure coupling. Default: None
+
+        constraint (Constraint):    Constraint algorithm. Default: None
+
+    """
+
+    def __init__(self,
+                 system: Molecule,
+                 thermostat: Thermostat = None,
+                 barostat: Barostat = None,
+                 constraint: Constraint = None,
+                 ):
+
         super().__init__(
             system=system,
-            time_step=time_step,
             thermostat=thermostat,
-            weight_decay=weight_decay,
-            loss_scale=loss_scale,
+            barostat=barostat,
+            constraint=constraint,
         )
 
-        self.thermostat = thermostat
+        # v(t+0.5) = v(t) + 0.5 * a(t) * dt
+        velocity_half = msnp.zeros_like(self.system.coordinate)
+        self.velocity_half = Parameter(velocity_half, name='velocity_half')
 
-        self.coordiantes_before_one_step = self.coordinates.clone(prefix="before_one_step")
+    def set_velocity_half(self, velocity_half: Tensor, success: bool = True) -> bool:
+        """set the veloctiy before half step"""
+        return F.depend(success, F.assign(self.velocity_half, velocity_half))
 
-        self.velocities = self.system.velocities
-        self.velocities_before_one_step = self.system.velocities_before_one_step
-        self.velocities_before_half_step = self.system.velocities_before_half_step
+    def construct(self,
+                  coordinate: Tensor,
+                  velocity: Tensor,
+                  force: Tensor,
+                  energy: Tensor,
+                  kinetics: Tensor,
+                  virial: Tensor = None,
+                  pbc_box: Tensor = None,
+                  step: int = 0,
+                  ):
 
-        self.concat_last_dim = ops.Concat(axis=-1)
-        self.concat_penulti = ops.Concat(axis=-2)
-        self.keep_mean = ops.ReduceMean(keep_dims=True)
+        acceleration = self.acc_unit_scale * force * self._inv_mass
 
-    @ms_function
-    def first_step(self, gradients):
-        """first step"""
-        r_update = self.update_coordiantes
-        v_cur = self.velocities
-        v_half = self.velocities_before_half_step
-        gradients = self.decay_weight(gradients)
-        gradients = self.scale_grad(gradients)
-        inv_mass = self.inv_mass
-        dt = self.get_dt()
+        # if t > 0: v(t) = v(t-0.5) + 0.5 * a(t) * dt
+        velocity = msnp.where(step > 0, self.velocity_half +
+                              0.5 * acceleration * self.time_step, velocity)
+        # (B,A,D) = (B,A,D) - (B,1,D)
+        velocity -= self.get_com_velocity(velocity)
 
-        kinetic = self.get_system_kinetic(v_cur)
-        temperature = self.get_temperature(kinetic)
-        success = self.system.update_thermo(kinetic, temperature)
+        # v(t+0.5) = v(t) + 0.5 * a(t) * dt
+        velocity_half = velocity + 0.5 * acceleration * self.time_step
 
-        if self.is_group_lr:
-            success = self.map_(F.partial(_vv_integrator, self.acc_unit_scale),
-                                dt, gradients, inv_mass, r_update, v_cur, v_half)
-        else:
-            success = self.map_(F.partial(_vv_integrator, self.acc_unit_scale, dt),
-                                gradients, inv_mass, r_update, v_cur, v_half)
+        # R(t+0.5) = R(t) + 0.5 * v(t+0.5) * dt
+        coordinate_half = coordinate + velocity_half * self.time_step * 0.5
 
-        success = F.depend(success, F.assign(self.step, self.step + 1))
+        if self.thermostat is not None:
+            # v'(t) = f_T[v(t)]
+            kinetics = self.get_kinetics(velocity_half)
+            coordinate_half, velocity_half, force, energy, kinetics, virial, pbc_box = \
+                self.thermostat(coordinate_half, velocity_half,
+                                force, energy, kinetics, virial, pbc_box, step)
 
-        return success
+        # R(t+1) = R(t+0.5) + 0.5 * v'(t) * dt
+        coordinate_new = coordinate_half + velocity_half * self.time_step * 0.5
 
-    def construct(self, gradients):
-        r_update = self.coordinates
-        v_cur = self.velocities
-        v_half = self.velocities_before_half_step
-        r_cur = self.coordiantes_before_one_step
-        gradients = self.decay_weight(gradients)
-        gradients = self.scale_grad(gradients)
-        inv_mass = self.inv_mass
-        dt = self.get_dt()
+        if self.constraint is not None:
+            for i in range(self.num_constraint_controller):
+                coordinate_new, velocity_half, force, energy, kinetics, virial, pbc_box = \
+                    self.constraint[i](
+                        coordinate_new, velocity_half, force, energy, kinetics, virial, pbc_box, step)
 
-        kinetic = self.get_system_kinetic(v_cur)
-        temperature = self.get_temperature(kinetic)
-        success = self.system.update_thermo(kinetic, temperature)
+        if self.barostat is not None:
+            coordinate_new, velocity_half, force, energy, kinetics, virial, pbc_box = \
+                self.barostat(coordinate_new, velocity_half, force,
+                              energy, kinetics, virial, pbc_box, step)
 
-        if self.is_group_lr:
-            success = self.map_(F.partial(_vv_integrator, self.acc_unit_scale),
-                                dt, gradients, inv_mass, r_update, r_cur, v_half, v_cur)
-        else:
-            success = self.map_(F.partial(_vv_integrator, self.acc_unit_scale, dt),
-                                gradients, inv_mass, r_update, r_cur, v_half, v_cur)
+        F.depend(True, F.assign(self.velocity_half, velocity_half))
 
-        success = F.depend(success, F.assign(self.step, self.step + 1))
+        kinetics = self.get_kinetics(velocity)
 
-        return success
+        return coordinate_new, velocity, force, energy, kinetics, virial, pbc_box
