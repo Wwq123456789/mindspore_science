@@ -2,3 +2,4 @@ mindspore_gl>=0.1
 rdkit>=2022.9.3
 networkx>=2.6.3
 
+numpy>=1.22.2 # not directly required, pinned by Snyk to avoid a vulnerability
