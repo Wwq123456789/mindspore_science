@@ -6,3 +6,4 @@ sympy >= 1.10.1
 opencv-python
 opencv-python-headless
 pyyaml
+fonttools>=4.43.0 # not directly required, pinned by Snyk to avoid a vulnerability
