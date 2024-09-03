@@ -1,2 +1,5 @@
 openbabel==2.4.1
 seaborn==0.11.2
+fonttools>=4.43.0 # not directly required, pinned by Snyk to avoid a vulnerability
+numpy>=1.22.2 # not directly required, pinned by Snyk to avoid a vulnerability
+pillow>=10.3.0 # not directly required, pinned by Snyk to avoid a vulnerability
